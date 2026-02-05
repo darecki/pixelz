@@ -89,11 +89,11 @@ Run the initial migration in Supabase SQL Editor (Dashboard → SQL Editor → N
      You should see one entry.
 
 6. **Web app**  
-   `pnpm dev:web` → `http://localhost:5173`. Sign in with Supabase, add test events (Home), sync to the server, view leaderboard.
+   `pnpm dev:web` → `http://localhost:5173`. Sign in, play levels (Home → Play), sync, view leaderboard.
 
 ## Next steps (implementation plan)
 
 - ~~**Phase 3:**~~ Done (web shell, auth, IndexedDB, sync, leaderboard, PWA).
-- **Phase 4:** Deterministic game engine + core gameplay (levels, scoring, event emission).
+- ~~**Phase 4**~~ Done (deterministic scoring, Play page, levels + random seed, event emission).
 - **Phase 5:** Sync and leaderboards end-to-end (full sync flow in game).
 - **Phase 6:** CI/CD (Vercel deploy, GitHub Actions) + polish.
