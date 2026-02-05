@@ -11,10 +11,20 @@ app.onError((err, c) => {
   console.error("[api]", message);
   return c.json({ error: "Internal Server Error", details: message }, 500);
 });
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: (origin) => {
+      if (!origin) return null;
+      if (allowedOrigins.includes(origin)) return origin;
+      if (origin.startsWith("https://") && origin.endsWith(".vercel.app"))
+        return origin;
+      return null;
+    },
     credentials: true,
   })
 );

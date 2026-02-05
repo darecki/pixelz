@@ -91,9 +91,34 @@ Run the initial migration in Supabase SQL Editor (Dashboard → SQL Editor → N
 6. **Web app**  
    `pnpm dev:web` → `http://localhost:5173`. Sign in, play levels (Home → Play), sync, view leaderboard.
 
+## Deploy (Vercel)
+
+Use **two Vercel projects** (one for the API, one for the web app) so both deploy from this repo.
+
+### API project
+
+1. **New Project** → Import this repo.
+2. **Root Directory:** `apps/api`.
+3. **Build & Development:** Leave **Build Command** empty (or use the default). Set **Install Command** to: `cd ../.. && pnpm install`. (Or in dashboard: Settings → General → Install Command.)
+4. **Environment variables:** Add the same vars as in `.env.example` (no `VITE_*`). Use the **pooler** `DATABASE_URL`. Do not pull from a linked env file if it would overwrite.
+5. Deploy. Note the API URL (e.g. `https://your-api.vercel.app`).
+
+### Web project
+
+1. **New Project** → Import the same repo again (or duplicate).
+2. **Root Directory:** `apps/web`.
+3. **Build & Development:** **Install Command:** `cd ../.. && pnpm install`. **Build Command:** `cd ../.. && pnpm run build --filter web`. **Output Directory:** `dist`.
+4. **Environment variables:** Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and **VITE_API_URL** = your deployed API URL from the API project.
+5. Deploy. The web app will call the API; CORS allows `*.vercel.app` origins.
+
+### After deploy
+
+- Run the DB migrations in Supabase if not already done.
+- Create a user in Supabase Auth and use the web app to sign in, play, sync, and view leaderboards.
+
 ## Next steps (implementation plan)
 
 - ~~**Phase 3:**~~ Done (web shell, auth, IndexedDB, sync, leaderboard, PWA).
 - ~~**Phase 4**~~ Done (deterministic scoring, Play page, levels + random seed, event emission).
 - **Phase 5:** Sync and leaderboards end-to-end (full sync flow in game).
-- **Phase 6:** CI/CD (Vercel deploy, GitHub Actions) + polish.
+- ~~**Phase 6:**~~ Done (CI/CD: Vercel deploy, GitHub Actions lint/build, README deploy + polish).
