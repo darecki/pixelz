@@ -1,5 +1,6 @@
 {
   "framework": null,
   "buildCommand": "cd ../.. && pnpm --filter \"api...\" run build",
-  "installCommand": "cd ../.. && pnpm install"
+  "installCommand": "cd ../.. && pnpm install",
+  "outputDirectory": "."
 }
