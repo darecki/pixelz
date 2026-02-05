@@ -45,6 +45,9 @@ app.get("/leaderboards/:levelId", handleLeaderboard);
 app.use("/sync", authMiddleware);
 app.post("/sync", handleSync);
 
+// So 404s are returned by our app (with CORS), not by the platform
+app.notFound((c) => c.json({ error: "Not found" }, 404));
+
 export default app;
 
 if (process.env.VERCEL !== "1") {

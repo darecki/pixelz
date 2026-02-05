@@ -25,7 +25,8 @@ Step-by-step: connect the repo to Vercel (API + Web), set env vars, run migratio
    | `SUPABASE_PUBLISHABLE_KEY` | `eyJ...` | Supabase → Project Settings → API → anon public |
    | `SUPABASE_SECRET_KEY` | `eyJ...` | Supabase → Project Settings → API → service_role (keep secret) |
    | `DATABASE_URL` | `postgresql://postgres.[ref]:[PASSWORD]@...pooler.supabase.com:6543/postgres` | Supabase → Project Settings → Database → Connection pooling → **URI** (Transaction or Session). Use the **pooler** URL, not Direct. Replace `[YOUR-PASSWORD]` with your DB password. |
-   | `ADDITIONAL_CORS_ORIGIN` | (optional) e.g. `https://your-web.vercel.app` or custom domain | Only if the web app URL is not `*.vercel.app` (e.g. custom domain). Must match the web origin exactly. |
+   | `ADDITIONAL_CORS_ORIGIN` | (optional) Your exact web URL, e.g. `https://pixelz-web.vercel.app` | **Set this if you see CORS errors.** Use the exact web app URL (no trailing slash). Helps when the browser origin must match precisely. |
+
 
 5. Click **Deploy**. Wait for the build to finish.
 6. Copy the **production URL** (e.g. `https://pixelz-api-xxx.vercel.app`). You need it for the Web project.
@@ -134,5 +135,5 @@ create policy "Allow all for service"
 
 - **API deployment fails at `tsc` (Cannot find module `@pixelz/shared`):** The API’s build script in `apps/api/package.json` builds the shared package first. Ensure **Install Command** is `cd ../.. && pnpm install` so the monorepo is installed; then the default **Build Command** (`pnpm run build`) will run the script that builds shared then the API.
 - **API returns 500 / “Could not reach API”:** Check API project env vars (especially `DATABASE_URL` uses the **pooler** URI). Check **Deployments** → latest → **Functions** logs.
-- **CORS errors from Web to API:** The API allows origins: `localhost:5173`, `127.0.0.1:5173`, and any `https://*.vercel.app`. It also sends `Access-Control-Allow-Headers: Content-Type, Authorization`. If the web app uses a custom domain, set **API** env var `ADDITIONAL_CORS_ORIGIN` to the web app URL (e.g. `https://pixelz.example.com`). Ensure `VITE_API_URL` in the Web project is exactly your API URL (no trailing slash).
+- **CORS errors from Web to API:** Set **API** env var `ADDITIONAL_CORS_ORIGIN` to your exact web URL (e.g. `https://pixelz-web.vercel.app`, no trailing slash), then redeploy the API. The API also allows any `https://*.vercel.app` and sends `Access-Control-Allow-Headers: Content-Type, Authorization`. Ensure `VITE_API_URL` in the Web project is exactly your API URL (no trailing slash). If you still see 404 + CORS, the request may not be reaching the app—check Vercel → API project → Deployments → Function logs.
 - **Leaderboard empty after sync:** Run migration 002 (RLS policies) if you see RLS errors in API logs. Ensure you’re signed in and synced from the Play result screen.
