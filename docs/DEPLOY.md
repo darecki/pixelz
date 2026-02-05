@@ -14,9 +14,8 @@ Step-by-step: connect the repo to Vercel (API + Web), set env vars, run migratio
    - **Root Directory:** click **Edit** → set to `apps/api` → **Save**.
    - **Framework Preset:** leave as “Other” (or “No framework”).
    - **Build and Output Settings:**  
-     Install and build are set in `apps/api/vercel.json`. You can leave the Vercel UI defaults (it will use the config from the repo):
-     - **Install Command:** `cd ../.. && pnpm install`
-     - **Build Command:** `cd ../.. && pnpm --filter "api..." run build` (builds `@pixelz/shared` then the API; don’t override with only `tsc` or the build will fail)
+     - **Install Command:** `cd ../.. && pnpm install` (toggle **on**).
+     - **Build Command:** Leave as default (`pnpm run build` is fine). The API’s `package.json` build script builds `@pixelz/shared` first, then runs `tsc`.
      - **Output Directory:** leave default
 4. **Environment variables:** Add these (use **Production**; add **Preview** too if you want PR previews). Copy values from your `.env.local` (or Supabase/Database dashboard).
 
@@ -132,7 +131,7 @@ create policy "Allow all for service"
 
 ## Troubleshooting
 
-- **API deployment fails at `tsc`:** The API depends on `@pixelz/shared`; the shared package must be built first. Use the build command from `apps/api/vercel.json` (`cd ../.. && pnpm --filter "api..." run build`). Don’t set Build Command to only `pnpm run build` or `tsc` in the API root.
+- **API deployment fails at `tsc` (Cannot find module `@pixelz/shared`):** The API’s build script in `apps/api/package.json` builds the shared package first. Ensure **Install Command** is `cd ../.. && pnpm install` so the monorepo is installed; then the default **Build Command** (`pnpm run build`) will run the script that builds shared then the API.
 - **API returns 500 / “Could not reach API”:** Check API project env vars (especially `DATABASE_URL` uses the **pooler** URI). Check **Deployments** → latest → **Functions** logs.
 - **CORS errors from Web to API:** API CORS allows `*.vercel.app`. Ensure `VITE_API_URL` is exactly your API URL (no trailing slash).
 - **Leaderboard empty after sync:** Run migration 002 (RLS policies) if you see RLS errors in API logs. Ensure you’re signed in and synced from the Play result screen.
