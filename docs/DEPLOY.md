@@ -38,7 +38,7 @@ Step-by-step: connect the repo to Vercel (API + Web), set env vars, run migratio
    - **Root Directory:** `apps/web`.
    - **Build and Output Settings** (from `apps/web/vercel.json`; override in UI if needed):
      - **Install Command:** `cd ../.. && pnpm install`
-     - **Build Command:** `cd ../.. && pnpm run build --filter web`
+     - **Build Command:** `cd ../.. && pnpm --filter "web..." run build`
      - **Output Directory:** `dist`
 3. **Environment variables:** Add these. Use the **API production URL** from step 1 for `VITE_API_URL`.
 
