@@ -16,7 +16,7 @@ Step-by-step: connect the repo to Vercel (API + Web), set env vars, run migratio
    - **Build and Output Settings:**  
      - **Install Command:** `cd ../.. && pnpm install` (toggle **on**).
      - **Build Command:** Leave as default (`pnpm run build` is fine). The API’s `package.json` build script builds `@pixelz/shared` first, then runs `tsc`.
-     - **Output Directory:** leave default
+     - **Output Directory:** `public` (from vercel.json; do not override to `.`)
 4. **Environment variables:** Add these (use **Production**; add **Preview** too if you want PR previews). Copy values from your `.env.local` (or Supabase/Database dashboard).
 
    | Name | Value | Where to get it |
@@ -135,5 +135,5 @@ create policy "Allow all for service"
 
 - **API deployment fails at `tsc` (Cannot find module `@pixelz/shared`):** The API’s build script in `apps/api/package.json` builds the shared package first. Ensure **Install Command** is `cd ../.. && pnpm install` so the monorepo is installed; then the default **Build Command** (`pnpm run build`) will run the script that builds shared then the API.
 - **API returns 500 / “Could not reach API”:** Check API project env vars (especially `DATABASE_URL` uses the **pooler** URI). Check **Deployments** → latest → **Functions** logs.
-- **CORS / 404 from Web to API:** Do **not** set **Output Directory** for the API project in Vercel. The API must run as a serverless function (so `/leaderboards/level_1` returns JSON); if Output Directory is set (e.g. to `.`), Vercel serves the build as static files and the “API” returns raw JS instead of running it. The API build outputs `index.js` at `apps/api/` so Vercel detects the function. Set **API** env var `ADDITIONAL_CORS_ORIGIN` to your exact web URL if needed.
+- **CORS / 404 from Web to API:** The API uses **Output Directory** `public` (empty `apps/api/public/` in repo). The API must run as a serverless function (so `/leaderboards/level_1` returns JSON); if Output Directory is set (e.g. to `.`), Vercel serves the build as static files and the “API” returns raw JS instead of running it. The API build outputs `index.js` at `apps/api/` so Vercel detects the function. Set **API** env var `ADDITIONAL_CORS_ORIGIN` to your exact web URL if needed.
 - **Leaderboard empty after sync:** Run migration 002 (RLS policies) if you see RLS errors in API logs. Ensure you’re signed in and synced from the Play result screen.
