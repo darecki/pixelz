@@ -88,3 +88,4 @@ apps/android/.externalNativeBuild/
 *.seed
 *.pid.lock
 .cache/
+.env*.local
