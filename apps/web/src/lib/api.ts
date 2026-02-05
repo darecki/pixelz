@@ -26,10 +26,17 @@ export async function syncEvents(accessToken: string, events: SyncEvent[]) {
     throw wrapFetchError(err, "Sync failed.");
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ details: res.statusText }));
-    throw new Error((err as { details?: string }).details ?? "Sync failed");
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    const msg = (err as { error?: string; details?: string }).error ?? (err as { details?: string }).details ?? "Sync failed";
+    throw new Error(msg);
   }
-  return syncResponseSchema.parse(await res.json());
+  const data = await res.json().catch(() => null);
+  if (data == null) throw new Error("Sync failed: invalid response");
+  try {
+    return syncResponseSchema.parse(data);
+  } catch (e) {
+    throw new Error("Sync failed: invalid response from server");
+  }
 }
 
 export async function fetchLeaderboard(levelId: string) {
@@ -40,5 +47,11 @@ export async function fetchLeaderboard(levelId: string) {
     throw wrapFetchError(err, "Leaderboard failed.");
   }
   if (!res.ok) throw new Error("Leaderboard failed");
-  return leaderboardResponseSchema.parse(await res.json());
+  const data = await res.json().catch(() => null);
+  if (data == null) throw new Error("Leaderboard failed");
+  try {
+    return leaderboardResponseSchema.parse(data);
+  } catch {
+    throw new Error("Leaderboard failed: invalid response from server");
+  }
 }

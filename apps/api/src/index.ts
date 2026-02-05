@@ -37,6 +37,9 @@ app.use(
   })
 );
 
+// Handle preflight so OPTIONS never hits auth (avoids 405)
+app.options("*", (c) => c.body(null, 204));
+
 app.get("/", (c) => c.json({ name: "pixelz-api", status: "ok" }));
 app.get("/health", (c) => c.json({ ok: true }));
 
