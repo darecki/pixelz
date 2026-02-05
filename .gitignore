@@ -8,6 +8,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+apps/api/*.js
 out/
 .next/
 .turbo/
