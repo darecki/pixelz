@@ -32,9 +32,12 @@ Or both in parallel: `pnpm dev`
 
 ## Env
 
-Copy `.env.example` to `.env.local` and fill in Supabase + database values. The API verifies Supabase Auth JWTs via JWKS (no JWT secret needed). See `.env.example` for variable names.
+Copy `.env.example` to `.env.local` and fill in all values. Both the API and the web app (Vite) read from `.env.local` at the repo root.
 
-**Important:** For `DATABASE_URL`, use the **Connection pooling** URI from Supabase (Project Settings → Database → Connection string → **Connection pooling** tab), not the Direct connection. The direct host (`db.xxx.supabase.co`) can cause `getaddrinfo ENOTFOUND`; the pooler host (`xxx.pooler.supabase.com`) works reliably.
+- **DATABASE_URL:** Use the **pooler** URI from Supabase (Database → Connect → Connection pooling → Transaction or Session), not Direct. Direct (`db.xxx.supabase.co`) can cause `getaddrinfo ENOTFOUND`; pooler (`xxx.pooler.supabase.com`) works.
+- **VITE_***: Same Supabase URL/key as above. **For local dev** set `VITE_API_URL=http://localhost:3000` and run the API with `pnpm dev:api` so the web app at localhost:5173 talks to your local API. (Using the Vercel API URL from localhost causes CORS and 404 unless the API is deployed and allows your origin.)
+
+**Vercel:** Do **not** run “Pull environment variables” when linking (`vercel link`) – it overwrites `.env.local`. Add the same variables in the Vercel project (Settings → Environment Variables) and set `DATABASE_URL` to the **pooler** URI there too. For production, set `VITE_API_URL` to your deployed API URL.
 
 ## Database (Supabase)
 
@@ -85,12 +88,12 @@ Run the initial migration in Supabase SQL Editor (Dashboard → SQL Editor → N
      ```
      You should see one entry.
 
-6. **Web app (optional)**  
-   `pnpm dev:web` → `http://localhost:5173`. It only shows the shared constant for now; auth and sync UI come in Phase 3.
+6. **Web app**  
+   `pnpm dev:web` → `http://localhost:5173`. Sign in with Supabase, add test events (Home), sync to the server, view leaderboard.
 
 ## Next steps (implementation plan)
 
-- **Phase 3:** Web app shell + offline storage (IndexedDB, PWA, Supabase Auth UI, “Sync now”).
+- ~~**Phase 3:**~~ Done (web shell, auth, IndexedDB, sync, leaderboard, PWA).
 - **Phase 4:** Deterministic game engine + core gameplay (levels, scoring, event emission).
-- **Phase 5:** Sync and leaderboards end-to-end (full sync flow, leaderboard screen).
+- **Phase 5:** Sync and leaderboards end-to-end (full sync flow in game).
 - **Phase 6:** CI/CD (Vercel deploy, GitHub Actions) + polish.

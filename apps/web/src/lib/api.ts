@@ -1,0 +1,44 @@
+import { syncRequestSchema, syncResponseSchema, leaderboardResponseSchema } from "@pixelz/shared";
+import type { SyncEvent } from "@pixelz/shared";
+
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
+function wrapFetchError(err: unknown, context: string): Error {
+  if (err instanceof TypeError && err.message === "Failed to fetch") {
+    return new Error(`${context} Could not reach API at ${API_URL}. Is the API running? (pnpm dev:api)`);
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+export async function syncEvents(accessToken: string, events: SyncEvent[]) {
+  const body = syncRequestSchema.parse({ events });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw wrapFetchError(err, "Sync failed.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ details: res.statusText }));
+    throw new Error((err as { details?: string }).details ?? "Sync failed");
+  }
+  return syncResponseSchema.parse(await res.json());
+}
+
+export async function fetchLeaderboard(levelId: string) {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/leaderboards/${encodeURIComponent(levelId)}`);
+  } catch (err) {
+    throw wrapFetchError(err, "Leaderboard failed.");
+  }
+  if (!res.ok) throw new Error("Leaderboard failed");
+  return leaderboardResponseSchema.parse(await res.json());
+}

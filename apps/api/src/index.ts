@@ -11,7 +11,13 @@ app.onError((err, c) => {
   console.error("[api]", message);
   return c.json({ error: "Internal Server Error", details: message }, 500);
 });
-app.use("*", cors({ origin: ["http://localhost:5173"], credentials: true }));
+app.use(
+  "*",
+  cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+  })
+);
 
 app.get("/", (c) => c.json({ name: "pixelz-api", status: "ok" }));
 app.get("/health", (c) => c.json({ ok: true }));
