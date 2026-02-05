@@ -1,0 +1,90 @@
+# Architecture / local-only docs (do not commit)
+offline_game_architecture_summary.md
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs and debug
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor and IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+
+# Testing and coverage
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# Vercel
+.vercel
+
+# PWA and service worker generated
+dev-dist/
+sw.js
+workbox-*.js
+precache-manifest.*.js
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional: local config overrides
+*.local
+*.local.*
+
+# iOS (when added)
+apps/ios/build/
+apps/ios/*.xcworkspace/xcuserdata/
+apps/ios/*.xcodeproj/xcuserdata/
+apps/ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
+*.moved-aside
+DerivedData/
+
+# Android (when added)
+apps/android/build/
+apps/android/.gradle/
+apps/android/local.properties
+apps/android/*.iml
+apps/android/captures/
+apps/android/.externalNativeBuild/
+*.apk
+*.aab
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+.cache/
