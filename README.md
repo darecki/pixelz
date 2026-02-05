@@ -91,13 +91,25 @@ Run the initial migration in Supabase SQL Editor (Dashboard → SQL Editor → N
 6. **Web app**  
    `pnpm dev:web` → `http://localhost:5173`. Sign in, play levels (Home → Play), sync, view leaderboard.
 
+## GitHub Actions
+
+CI runs on every **push** and **pull request** to `main` (see [.github/workflows/ci.yml](.github/workflows/ci.yml)):
+
+- **Install** – `pnpm install --frozen-lockfile`
+- **Build** – `pnpm run build` (shared, api, web)
+- **Lint** – `pnpm run lint`
+
+In-flight runs for the same branch are cancelled when a new run is triggered.
+
 ## Deploy (Vercel)
 
-Use **two Vercel projects** (one for the API, one for the web app) so both deploy from this repo.
+**→ Full step-by-step: [docs/DEPLOY.md](docs/DEPLOY.md)** (connect repo, env vars, migrations, verify).
+
+Connect this repo to Vercel so that **pushes to `main` (and optionally PRs) trigger automatic deploys**. Use **two Vercel projects** (one for the API, one for the web app), both pointing at this repo.
 
 ### API project
 
-1. **New Project** → Import this repo.
+1. In Vercel: **Add New** → **Project** → Import this GitHub repo (or connect GitHub first in Account Settings).
 2. **Root Directory:** `apps/api`.
 3. **Build & Development:** Leave **Build Command** empty (or use the default). Set **Install Command** to: `cd ../.. && pnpm install`. (Or in dashboard: Settings → General → Install Command.)
 4. **Environment variables:** Add the same vars as in `.env.example` (no `VITE_*`). Use the **pooler** `DATABASE_URL`. Do not pull from a linked env file if it would overwrite.
@@ -105,7 +117,7 @@ Use **two Vercel projects** (one for the API, one for the web app) so both deplo
 
 ### Web project
 
-1. **New Project** → Import the same repo again (or duplicate).
+1. **Add New** → **Project** → Import the same repo again (create a second project).
 2. **Root Directory:** `apps/web`.
 3. **Build & Development:** **Install Command:** `cd ../.. && pnpm install`. **Build Command:** `cd ../.. && pnpm run build --filter web`. **Output Directory:** `dist`.
 4. **Environment variables:** Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and **VITE_API_URL** = your deployed API URL from the API project.
@@ -113,6 +125,7 @@ Use **two Vercel projects** (one for the API, one for the web app) so both deplo
 
 ### After deploy
 
+- In each Vercel project, **Settings → Git** confirms the connected repo and branch (e.g. **Production Branch**: `main`). Pushes to `main` deploy to production; PRs get preview URLs if enabled.
 - Run the DB migrations in Supabase if not already done.
 - Create a user in Supabase Auth and use the web app to sign in, play, sync, and view leaderboards.
 

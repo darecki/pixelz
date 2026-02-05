@@ -15,16 +15,24 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ];
+const extraOrigin = process.env.ADDITIONAL_CORS_ORIGIN?.trim();
+if (extraOrigin) allowedOrigins.push(extraOrigin);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.includes(origin)) return true;
+  if (origin.startsWith("https://") && origin.includes(".vercel.app")) return true;
+  return false;
+}
+
 app.use(
   "*",
   cors({
     origin: (origin) => {
       if (!origin) return null;
-      if (allowedOrigins.includes(origin)) return origin;
-      if (origin.startsWith("https://") && origin.endsWith(".vercel.app"))
-        return origin;
-      return null;
+      return isAllowedOrigin(origin) ? origin : null;
     },
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
     credentials: true,
   })
 );
