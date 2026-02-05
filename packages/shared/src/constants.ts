@@ -1,0 +1,5 @@
+export const GAME = {
+  MAX_SCORE: 1_000_000,
+  NICKNAME_MAX_LENGTH: 32,
+  LEADERBOARD_TOP_N: 100,
+} as const;
