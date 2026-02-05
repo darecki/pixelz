@@ -1,8 +1,14 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fetchLeaderboard } from "../lib/api";
 
+const LEVEL_OPTIONS = ["level_1", "random"] as const;
+
 export default function Leaderboard() {
-  const [levelId, setLevelId] = useState("level_1");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const levelId = (searchParams.get("level") ?? "level_1") as (typeof LEVEL_OPTIONS)[number];
+  const effectiveLevel = LEVEL_OPTIONS.includes(levelId) ? levelId : "level_1";
+
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchLeaderboard>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -10,11 +16,15 @@ export default function Leaderboard() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetchLeaderboard(levelId)
+    fetchLeaderboard(effectiveLevel)
       .then(setData)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
-  }, [levelId]);
+  }, [effectiveLevel]);
+
+  function setLevelId(next: string) {
+    setSearchParams(next ? { level: next } : {});
+  }
 
   if (loading) return <p>Loading leaderboard…</p>;
   if (error) return <p style={{ color: "#c00" }}>{error}</p>;
@@ -25,9 +35,12 @@ export default function Leaderboard() {
       <div style={{ marginBottom: "1rem" }}>
         <label>
           Level:{" "}
-          <select value={levelId} onChange={(e) => setLevelId(e.target.value)}>
-            <option value="level_1">level_1</option>
-            <option value="random">random</option>
+          <select value={effectiveLevel} onChange={(e) => setLevelId(e.target.value)}>
+            {LEVEL_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
           </select>
         </label>
       </div>

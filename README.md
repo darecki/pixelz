@@ -120,5 +120,5 @@ Use **two Vercel projects** (one for the API, one for the web app) so both deplo
 
 - ~~**Phase 3:**~~ Done (web shell, auth, IndexedDB, sync, leaderboard, PWA).
 - ~~**Phase 4**~~ Done (deterministic scoring, Play page, levels + random seed, event emission).
-- **Phase 5:** Sync and leaderboards end-to-end (full sync flow in game).
+- ~~**Phase 5:**~~ Done (sync and leaderboards end-to-end: in-game "Sync and view leaderboard", leaderboard ?level= URL, background sync after level complete).
 - ~~**Phase 6:**~~ Done (CI/CD: Vercel deploy, GitHub Actions lint/build, README deploy + polish).

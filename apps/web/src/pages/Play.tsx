@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { computeScore } from "@pixelz/shared";
 import { appendEvent } from "../lib/eventLog";
+import { performSync, trySyncInBackground } from "../lib/sync";
 
 export default function Play() {
   const [searchParams] = useSearchParams();
@@ -14,6 +15,7 @@ export default function Play() {
   const [started, setStarted] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
 
@@ -65,9 +67,23 @@ export default function Play() {
         payload: { levelId, ...payload },
       });
     }
+    trySyncInBackground();
   }
 
   const isRandom = seed != null && seed !== "";
+  const leaderboardLevel = isRandom ? "random" : levelId;
+
+  async function handleSyncAndViewLeaderboard() {
+    setSyncing(true);
+    try {
+      await performSync();
+    } catch {
+      // Still navigate; user can sync from Home
+    } finally {
+      setSyncing(false);
+    }
+    navigate(`/leaderboard?level=${encodeURIComponent(leaderboardLevel)}`);
+  }
 
   return (
     <div style={{ padding: "1rem", maxWidth: 400, margin: "0 auto" }}>
@@ -99,20 +115,30 @@ export default function Play() {
           <p style={{ fontSize: "1.25rem" }}>
             <strong>Score: {finalScore}</strong> (moves: {moves}, time: {(timeMs / 1000).toFixed(1)}s)
           </p>
-          <p style={{ color: "#666" }}>Result saved to offline log. Sync from Home to upload.</p>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }}>
-              Home
+          <p style={{ color: "#666" }}>
+            Result saved offline. Sync to upload your score to the leaderboard.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
+            <button
+              type="button"
+              onClick={handleSyncAndViewLeaderboard}
+              disabled={syncing}
+              style={{ padding: "0.5rem 1rem" }}
+            >
+              {syncing ? "Syncing…" : "Sync and view leaderboard"}
             </button>
             <button
               type="button"
-              onClick={() => navigate("/leaderboard")}
+              onClick={() => navigate(`/leaderboard?level=${encodeURIComponent(leaderboardLevel)}`)}
               style={{ padding: "0.5rem 1rem" }}
             >
-              Leaderboard
+              View leaderboard
             </button>
             <button type="button" onClick={start} style={{ padding: "0.5rem 1rem" }}>
               Play again
+            </button>
+            <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }}>
+              Home
             </button>
           </div>
         </div>

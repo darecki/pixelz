@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { syncEvents } from "../lib/api";
-import { getPendingEvents, getPendingCount, removeFirstEvents } from "../lib/eventLog";
-import { supabase } from "../lib/supabase";
+import { getPendingCount } from "../lib/eventLog";
+import { performSync } from "../lib/sync";
 
 type Props = { onSynced?: () => void };
 
@@ -20,27 +19,21 @@ export default function SyncButton({ onSynced }: Props) {
   }, []);
 
   async function handleSync() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      setMessage("Sign in to sync.");
-      return;
-    }
-    const events = await getPendingEvents();
-    if (events.length === 0) {
-      setMessage("Nothing to sync.");
-      return;
-    }
     setSyncing(true);
     setMessage(null);
     try {
-      const result = await syncEvents(session.access_token, events);
-      await removeFirstEvents(result.acceptedCount);
+      const result = await performSync();
       await refreshCount();
+      if (result === null) {
+        const n = await getPendingCount();
+        setMessage(n === 0 ? "Nothing to sync." : "Sign in to sync.");
+        return;
+      }
       onSynced?.();
       setMessage(
-        result.rejectedCount > 0
-          ? `Synced: ${result.acceptedCount} accepted, ${result.rejectedCount} rejected.`
-          : `Synced ${result.acceptedCount} event(s).`
+        result.rejected > 0
+          ? `Synced: ${result.accepted} accepted, ${result.rejected} rejected.`
+          : `Synced ${result.accepted} event(s).`
       );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Sync failed");
