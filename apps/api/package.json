@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "cd ../.. && pnpm --filter @pixelz/shared run build && cd apps/api && tsc",
+    "build": "pnpm --prefix ../.. --filter @pixelz/shared run build && tsc",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit"
   },
