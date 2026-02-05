@@ -2,5 +2,6 @@
   "framework": null,
   "buildCommand": "cd ../.. && pnpm --filter \"api...\" run build",
   "installCommand": "cd ../.. && pnpm install",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
 }

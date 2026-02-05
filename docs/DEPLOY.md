@@ -16,7 +16,7 @@ Step-by-step: connect the repo to Vercel (API + Web), set env vars, run migratio
    - **Build and Output Settings:**  
      - **Install Command:** `cd ../.. && pnpm install` (toggle **on**).
      - **Build Command:** Leave as default (`pnpm run build` is fine). The API’s `package.json` build script builds `@pixelz/shared` first, then runs `tsc`.
-     - **Output Directory:** `public` (from vercel.json; do not override to `.`)
+     - **Output Directory:** `public` (from vercel.json; do not override to `.`). All routes are rewritten to the serverless function at `api/index.js`.
 4. **Environment variables:** Add these (use **Production**; add **Preview** too if you want PR previews). Copy values from your `.env.local` (or Supabase/Database dashboard).
 
    | Name | Value | Where to get it |
