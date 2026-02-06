@@ -6,6 +6,15 @@ import { verifyTokenOptional } from "./auth.js";
 
 const LEADERBOARD_HANDLER_TIMEOUT_MS = 10_000;
 
+type LeaderboardRow = {
+  user_id: string | number;
+  nickname: string | null;
+  score: number;
+  moves: number;
+  time_ms: number;
+  created_at_iso: string | null;
+};
+
 async function getAppUserIdBySupabaseAuthId(supabaseAuthId: string): Promise<string | null> {
   const rows = await sql`
     select id from public.app_users where supabase_auth_id = ${supabaseAuthId} limit 1
@@ -46,7 +55,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
   const lowerIsBetter = levelId.startsWith("reflex_");
 
   try {
-    const rows = await Promise.race([
+    const raw = await Promise.race([
       lowerIsBetter
         ? sql`
           select
@@ -77,9 +86,10 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
           limit ${GAME.LEADERBOARD_TOP_N}
         `,
       timeout(LEADERBOARD_HANDLER_TIMEOUT_MS),
-    ]) as Awaited<ReturnType<typeof sql>>;
+    ]);
+    const rows: LeaderboardRow[] = raw as unknown as LeaderboardRow[];
 
-    const entries = rows.map((row, index) => ({
+    const entries = rows.map((row: LeaderboardRow, index: number) => ({
       rank: index + 1,
       userId: String(row.user_id),
       nickname: row.nickname ?? null,
