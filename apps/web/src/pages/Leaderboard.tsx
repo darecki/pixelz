@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { REFLEX_LEVEL_IDS } from "@pixelz/shared";
+import { PREDEFINED_LEVEL_IDS } from "../game/levels";
 import { fetchLeaderboard } from "../lib/api";
 
-const LEVEL_OPTIONS = ["level_1", "random"] as const;
+const LEVEL_OPTIONS = [...REFLEX_LEVEL_IDS, ...PREDEFINED_LEVEL_IDS, "random"] as const;
 
 export default function Leaderboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const levelId = (searchParams.get("level") ?? "level_1") as (typeof LEVEL_OPTIONS)[number];
-  const effectiveLevel = LEVEL_OPTIONS.includes(levelId) ? levelId : "level_1";
+  const effectiveLevel = (LEVEL_OPTIONS as readonly string[]).includes(levelId) ? levelId : "level_1";
 
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchLeaderboard>> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,18 +51,37 @@ export default function Leaderboard() {
           <tr>
             <th style={{ textAlign: "left", padding: "0.5rem" }}>Rank</th>
             <th style={{ textAlign: "left", padding: "0.5rem" }}>User</th>
-            <th style={{ textAlign: "right", padding: "0.5rem" }}>Score</th>
-            <th style={{ textAlign: "right", padding: "0.5rem" }}>Moves</th>
-            <th style={{ textAlign: "right", padding: "0.5rem" }}>Time (ms)</th>
+            {effectiveLevel.startsWith("reflex_") ? (
+              <th style={{ textAlign: "right", padding: "0.5rem" }}>Time (s)</th>
+            ) : (
+              <>
+                <th style={{ textAlign: "right", padding: "0.5rem" }}>Score</th>
+                <th style={{ textAlign: "right", padding: "0.5rem" }}>Moves</th>
+                <th style={{ textAlign: "right", padding: "0.5rem" }}>Time (ms)</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
           {data.entries.length === 0 ? (
             <tr>
-              <td colSpan={5} style={{ padding: "1rem", color: "#666" }}>
+              <td
+                colSpan={effectiveLevel.startsWith("reflex_") ? 3 : 5}
+                style={{ padding: "1rem", color: "#666" }}
+              >
                 No entries yet.
               </td>
             </tr>
+          ) : effectiveLevel.startsWith("reflex_") ? (
+            data.entries.map((e) => (
+              <tr key={e.userId + e.score + e.timeMs}>
+                <td style={{ padding: "0.5rem" }}>{e.rank}</td>
+                <td style={{ padding: "0.5rem" }}>{e.nickname ?? e.userId.slice(0, 8)}</td>
+                <td style={{ textAlign: "right", padding: "0.5rem" }}>
+                  {(e.timeMs / 1000).toFixed(2)}
+                </td>
+              </tr>
+            ))
           ) : (
             data.entries.map((e) => (
               <tr key={e.userId + e.score + e.timeMs}>

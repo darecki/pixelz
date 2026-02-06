@@ -9,20 +9,36 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
     return c.json({ error: "Missing levelId" }, 400);
   }
 
+  const lowerIsBetter = levelId.startsWith("reflex_");
+
   try {
-    const rows = await sql`
-      select
-        s.score,
-        s.moves,
-        s.time_ms,
-        u.id as user_id,
-        u.nickname
-      from public.scores s
-      join public.app_users u on u.id = s.user_id
-      where s.level_id = ${levelId}
-      order by s.score desc, s.time_ms asc
-      limit ${GAME.LEADERBOARD_TOP_N}
-    `;
+    const rows = lowerIsBetter
+      ? await sql`
+          select
+            s.score,
+            s.moves,
+            s.time_ms,
+            u.id as user_id,
+            u.nickname
+          from public.scores s
+          join public.app_users u on u.id = s.user_id
+          where s.level_id = ${levelId}
+          order by s.time_ms asc, s.score desc
+          limit ${GAME.LEADERBOARD_TOP_N}
+        `
+      : await sql`
+          select
+            s.score,
+            s.moves,
+            s.time_ms,
+            u.id as user_id,
+            u.nickname
+          from public.scores s
+          join public.app_users u on u.id = s.user_id
+          where s.level_id = ${levelId}
+          order by s.score desc, s.time_ms asc
+          limit ${GAME.LEADERBOARD_TOP_N}
+        `;
 
     const entries = rows.map((row, index) => ({
       rank: index + 1,
