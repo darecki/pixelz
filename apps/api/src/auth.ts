@@ -11,6 +11,7 @@ const SupabaseJWKS = jose.createRemoteJWKSet(jwksUrl);
 
 export type AuthPayload = {
   sub: string; // Supabase auth user id
+  email?: string | null;
 };
 
 export const authMiddleware = createMiddleware<{
@@ -27,7 +28,8 @@ export const authMiddleware = createMiddleware<{
     if (!sub) {
       return c.json({ error: "Invalid token payload" }, 401);
     }
-    c.set("auth", { sub });
+    const email = (payload.email as string | undefined) ?? null;
+    c.set("auth", { sub, email });
     await next();
   } catch {
     return c.json({ error: "Invalid or expired token" }, 401);

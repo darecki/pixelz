@@ -18,6 +18,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
             s.score,
             s.moves,
             s.time_ms,
+            s.created_at,
             u.id as user_id,
             u.nickname
           from public.scores s
@@ -31,6 +32,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
             s.score,
             s.moves,
             s.time_ms,
+            s.created_at,
             u.id as user_id,
             u.nickname
           from public.scores s
@@ -47,6 +49,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
       score: Number(row.score),
       moves: Number(row.moves),
       timeMs: Number(row.time_ms),
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     }));
 
     const response = leaderboardResponseSchema.parse({

@@ -14,16 +14,21 @@ function validateScore(score: number, moves: number, timeMs: number): boolean {
   return true;
 }
 
-async function getOrCreateAppUserId(supabaseAuthId: string): Promise<string> {
+async function getOrCreateAppUserId(supabaseAuthId: string, email: string | null): Promise<string> {
   const existing = await sql`
-    select id from public.app_users where supabase_auth_id = ${supabaseAuthId}
+    select id, nickname from public.app_users where supabase_auth_id = ${supabaseAuthId}
   `;
   if (existing.length > 0) {
+    if (email != null && existing[0].nickname == null) {
+      await sql`
+        update public.app_users set nickname = ${email} where supabase_auth_id = ${supabaseAuthId}
+      `;
+    }
     return existing[0].id;
   }
   const inserted = await sql`
-    insert into public.app_users (supabase_auth_id)
-    values (${supabaseAuthId})
+    insert into public.app_users (supabase_auth_id, nickname)
+    values (${supabaseAuthId}, ${email})
     returning id
   `;
   return inserted[0].id;
@@ -39,7 +44,7 @@ export async function handleSync(c: Context): Promise<Response> {
 
   const { events } = parsed.data;
   const rejectedIndices: number[] = [];
-  const appUserId = await getOrCreateAppUserId(auth.sub);
+  const appUserId = await getOrCreateAppUserId(auth.sub, auth.email ?? null);
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i] as SyncEvent;

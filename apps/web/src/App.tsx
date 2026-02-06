@@ -23,7 +23,6 @@ function Layout({ session, children }: { session: Session | null; children: Reac
     <div>
       <nav style={{ padding: "0.5rem 1rem", borderBottom: "1px solid #ccc", marginBottom: "1rem" }}>
         <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
-        <Link to="/play" style={{ marginRight: "1rem" }}>Play</Link>
         <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
         <span style={{ marginRight: "1rem", color: "#666" }}>{session.user.email}</span>
         <button type="button" onClick={signOut} style={{ padding: "0.25rem 0.5rem" }}>Sign out</button>

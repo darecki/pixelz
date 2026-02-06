@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
-import { performSync, trySyncInBackground } from "../../lib/sync";
+import { performSync } from "../../lib/sync";
 import {
   REFLEX_COLORS,
   COUNTDOWN_MS,
@@ -10,7 +10,7 @@ import {
 } from "./constants";
 import { useBeep } from "./useBeep";
 
-type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "finished";
+type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished";
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
 
@@ -24,7 +24,6 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   const [cumulativeTimeMs, setCumulativeTimeMs] = useState(0);
   const [countdownStep, setCountdownStep] = useState(0);
   const [targetColor, setTargetColor] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -56,8 +55,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
       longBeep();
       return;
     }
-    const value = COUNTDOWN_STEPS[countdownStep];
-    if (value !== 0) shortBeep();
+    shortBeep();
     countdownTimerRef.current = setTimeout(() => {
       setCountdownStep((s) => s + 1);
     }, COUNTDOWN_MS);
@@ -76,7 +74,6 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     const newTotal = cumulativeTimeMs + elapsed;
     setCumulativeTimeMs(newTotal);
     if (round >= totalRounds) {
-      setPhase("finished");
       appendEvent({
         type: "LEVEL_COMPLETED",
         payload: {
@@ -86,7 +83,10 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
           timeMs: newTotal,
         },
       });
-      trySyncInBackground();
+      setPhase("saving");
+      performSync()
+        .catch(() => {})
+        .finally(() => setPhase("finished"));
       return;
     }
     setPhase("delay");
@@ -96,18 +96,6 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
       setPhase("countdown");
       setCountdownStep(0);
     }, DELAY_AFTER_CORRECT_MS);
-  }
-
-  async function handleSyncAndViewLeaderboard() {
-    setSyncing(true);
-    try {
-      await performSync();
-    } catch {
-      // ignore
-    } finally {
-      setSyncing(false);
-    }
-    navigate(`/leaderboard?level=${encodeURIComponent(levelId)}`);
   }
 
   const containerStyle: React.CSSProperties = {
@@ -198,7 +186,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     );
   }
 
-  if (phase === "finished") {
+  if (phase === "saving" || phase === "finished") {
     return (
       <div style={containerStyle}>
         <h2 style={{ marginBottom: "0.5rem" }}>Done!</h2>
@@ -206,28 +194,21 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
         <p style={{ color: "#666", marginBottom: "1rem", fontSize: "0.9rem" }}>
-          Result saved. Sync to upload to the leaderboard.
+          {phase === "saving" ? "Saving…" : "Saved to leaderboard."}
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"
-            onClick={handleSyncAndViewLeaderboard}
-            disabled={syncing}
+            onClick={() => navigate(`/leaderboard?level=${encodeURIComponent(levelId)}&justFinished=1`)}
             style={ctaButtonStyle}
-          >
-            {syncing ? "Syncing…" : "Sync and view leaderboard"}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/leaderboard?level=${encodeURIComponent(levelId)}`)}
-            style={ctaButtonStyle}
+            disabled={phase === "saving"}
           >
             View leaderboard
           </button>
-          <button type="button" onClick={startGame} style={ctaButtonStyle}>
+          <button type="button" onClick={startGame} style={ctaButtonStyle} disabled={phase === "saving"}>
             Play again
           </button>
-          <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle}>
+          <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle} disabled={phase === "saving"}>
             Home
           </button>
         </div>

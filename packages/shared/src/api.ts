@@ -12,6 +12,7 @@ export const leaderboardEntrySchema = z.object({
   score: z.number().int().min(0),
   moves: z.number().int().min(0),
   timeMs: z.number().int().min(0),
+  createdAt: z.string(),
 });
 
 export const syncResponseSchema = z.object({
