@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { REFLEX_LEVEL_IDS } from "@pixelz/shared";
-import { fetchLeaderboard } from "../lib/api";
+import { REFLEX_LEVEL_IDS, REFLEX_LEVELS } from "@pixelz/shared";
+import { fetchLeaderboard, createLeaderboardTimeoutSignal } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 function displayUser(e: { nickname: string | null; userId: string }) {
@@ -14,45 +14,80 @@ function formatTimestamp(iso: string): string {
 }
 
 const LEVEL_OPTIONS = [...REFLEX_LEVEL_IDS] as const;
+const DEFAULT_LEVEL: (typeof REFLEX_LEVEL_IDS)[number] = "reflex_level_1";
 
 export default function Leaderboard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const levelId = (searchParams.get("level") ?? REFLEX_LEVEL_IDS[0]) as (typeof LEVEL_OPTIONS)[number];
-  const effectiveLevel = (LEVEL_OPTIONS as readonly string[]).includes(levelId) ? levelId : REFLEX_LEVEL_IDS[0];
+  const levelId = (searchParams.get("level") ?? DEFAULT_LEVEL) as (typeof LEVEL_OPTIONS)[number];
+  const effectiveLevel = (LEVEL_OPTIONS as readonly string[]).includes(levelId) ? levelId : DEFAULT_LEVEL;
   const justFinished = searchParams.get("justFinished") === "1";
 
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchLeaderboard>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  // Sync URL when level param is missing or invalid so dropdown and address bar match
+  useEffect(() => {
+    if (levelId !== effectiveLevel) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("level", effectiveLevel);
+        return next;
+      });
+    }
+  }, [levelId, effectiveLevel, setSearchParams]);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchLeaderboard(effectiveLevel)
-      .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
-      .finally(() => setLoading(false));
-  }, [effectiveLevel]);
-
-  useEffect(() => {
-    if (!justFinished) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUserEmail(session?.user?.email ?? null);
-    });
-  }, [justFinished]);
+    const { signal, cleanup: cleanupTimeout } = createLeaderboardTimeoutSignal();
+    const run = async () => {
+      try {
+        // Fetch without token first so the table appears immediately (getSession can hang)
+        const result = await fetchLeaderboard(effectiveLevel, undefined, signal);
+        cleanupTimeout();
+        if (!cancelled) {
+          setData(result);
+          setLoading(false);
+        }
+        if (!cancelled && justFinished) {
+          try {
+            const token = (await supabase.auth.getSession()).data.session?.access_token ?? undefined;
+            const withUser = await fetchLeaderboard(effectiveLevel, token);
+            if (!cancelled) setData(withUser);
+          } catch {
+            // Already have data; highlight may be missing
+          }
+        }
+      } catch (err) {
+        cleanupTimeout();
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed");
+          setLoading(false);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+      cleanupTimeout();
+    };
+  }, [effectiveLevel, justFinished]);
 
   function setLevelId(next: string) {
     setSearchParams(next ? { level: next } : {});
   }
 
   const highlightedRowKey = useMemo(() => {
-    if (!data?.entries.length || !justFinished || !currentUserEmail) return null;
-    const mine = data.entries.filter((e) => e.nickname === currentUserEmail);
+    if (!data?.entries.length || !justFinished || !data.currentUserId) return null;
+    const mine = data.entries.filter((e) => e.userId === data.currentUserId);
     if (mine.length === 0) return null;
     const latest = mine.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
     return `${latest.userId}-${latest.createdAt}`;
-  }, [data?.entries, justFinished, currentUserEmail]);
+  }, [data?.entries, data?.currentUserId, justFinished]);
 
   if (loading) return <p>Loading leaderboard…</p>;
   if (error) return <p style={{ color: "#c00" }}>{error}</p>;
@@ -66,7 +101,7 @@ export default function Leaderboard() {
           <select value={effectiveLevel} onChange={(e) => setLevelId(e.target.value)}>
             {LEVEL_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
-                {opt === "reflex_level_1" ? "10 rounds" : "15 rounds"}
+                {REFLEX_LEVELS[opt as keyof typeof REFLEX_LEVELS] != null ? `${REFLEX_LEVELS[opt as keyof typeof REFLEX_LEVELS]} rounds` : opt}
               </option>
             ))}
           </select>

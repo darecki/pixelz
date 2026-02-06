@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { REFLEX_LEVELS } from "@pixelz/shared";
 import { GAMES } from "../games/registry";
 
 export default function Home() {
@@ -17,7 +18,7 @@ export default function Home() {
                   to={`/play?game=${game.id}&level=${id}`}
                   style={{ padding: "0.5rem 1rem", background: "#eee", borderRadius: 4 }}
                 >
-                  {id === "reflex_level_1" ? "10 rounds" : id === "reflex_level_2" ? "15 rounds" : id}
+                  {REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS] != null ? `${REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS]} rounds` : id}
                 </Link>
               ))}
             </div>

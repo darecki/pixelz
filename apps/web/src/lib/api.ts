@@ -39,11 +39,22 @@ export async function syncEvents(accessToken: string, events: SyncEvent[]) {
   }
 }
 
-export async function fetchLeaderboard(levelId: string) {
+const LEADERBOARD_TIMEOUT_MS = 15_000;
+
+export async function fetchLeaderboard(
+  levelId: string,
+  accessToken?: string | null,
+  signal?: AbortSignal | null
+) {
+  const headers: HeadersInit = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/leaderboards/${encodeURIComponent(levelId)}`);
+    res = await fetch(`${API_URL}/leaderboards/${encodeURIComponent(levelId)}`, { headers, signal });
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Request timed out. Check the API is running (pnpm dev:api).");
+    }
     throw wrapFetchError(err, "Leaderboard failed.");
   }
   if (!res.ok) throw new Error("Leaderboard failed");
@@ -54,4 +65,13 @@ export async function fetchLeaderboard(levelId: string) {
   } catch {
     throw new Error("Leaderboard failed: invalid response from server");
   }
+}
+
+export function createLeaderboardTimeoutSignal(): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), LEADERBOARD_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(id),
+  };
 }

@@ -12,12 +12,14 @@ export const GAME = {
 
 /** Reflex game: levelId -> number of rounds. Leaderboard sorts by time ascending (lower is better). */
 export const REFLEX_LEVELS = {
+  reflex_level_0: 5,
   reflex_level_1: 10,
   reflex_level_2: 15,
+  reflex_level_3: 20,
 } as const;
 
 export type ReflexLevelId = keyof typeof REFLEX_LEVELS;
-export const REFLEX_LEVEL_IDS: ReflexLevelId[] = ["reflex_level_1", "reflex_level_2"];
+export const REFLEX_LEVEL_IDS: ReflexLevelId[] = ["reflex_level_0", "reflex_level_1", "reflex_level_2", "reflex_level_3"];
 
 /**
  * Deterministic score from moves and time. Server uses same bounds (0..MAX_SCORE).

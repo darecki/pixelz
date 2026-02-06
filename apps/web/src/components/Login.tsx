@@ -7,6 +7,7 @@ type Mode = "signin" | "signup";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nickname, setNickname] = useState("");
   const [mode, setMode] = useState<Mode>("signin");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -17,7 +18,11 @@ export default function Login() {
     setMessage(null);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { nickname: nickname.trim() || undefined } },
+        });
         if (error) throw error;
         setMessage("Check your email to confirm, or sign in.");
       } else {
@@ -48,6 +53,22 @@ export default function Login() {
             style={{ width: "100%", padding: "0.5rem" }}
           />
         </div>
+        {mode === "signup" && (
+          <div style={{ marginBottom: "0.75rem" }}>
+            <label htmlFor="nickname" style={{ display: "block", marginBottom: "0.25rem" }}>
+              Nickname (for leaderboard)
+            </label>
+            <input
+              id="nickname"
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={32}
+              placeholder="e.g. player1"
+              style={{ width: "100%", padding: "0.5rem" }}
+            />
+          </div>
+        )}
         <div style={{ marginBottom: "0.75rem" }}>
           <label htmlFor="password" style={{ display: "block", marginBottom: "0.25rem" }}>
             Password

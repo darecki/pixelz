@@ -24,6 +24,7 @@ export const syncResponseSchema = z.object({
 export const leaderboardResponseSchema = z.object({
   levelId: z.string(),
   entries: z.array(leaderboardEntrySchema),
+  currentUserId: z.string().optional(),
 });
 
 export type SyncRequest = z.infer<typeof syncRequestSchema>;

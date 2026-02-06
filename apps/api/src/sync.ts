@@ -14,21 +14,31 @@ function validateScore(score: number, moves: number, timeMs: number): boolean {
   return true;
 }
 
-async function getOrCreateAppUserId(supabaseAuthId: string, email: string | null): Promise<string> {
+function displayName(nickname: string | null, email: string | null): string | null {
+  const name = (nickname?.trim() || null) ?? email;
+  return name || null;
+}
+
+async function getOrCreateAppUserId(
+  supabaseAuthId: string,
+  email: string | null,
+  nicknameFromJwt: string | null
+): Promise<string> {
+  const name = displayName(nicknameFromJwt, email);
   const existing = await sql`
     select id, nickname from public.app_users where supabase_auth_id = ${supabaseAuthId}
   `;
   if (existing.length > 0) {
-    if (email != null && existing[0].nickname == null) {
+    if (name != null && existing[0].nickname == null) {
       await sql`
-        update public.app_users set nickname = ${email} where supabase_auth_id = ${supabaseAuthId}
+        update public.app_users set nickname = ${name} where supabase_auth_id = ${supabaseAuthId}
       `;
     }
     return existing[0].id;
   }
   const inserted = await sql`
     insert into public.app_users (supabase_auth_id, nickname)
-    values (${supabaseAuthId}, ${email})
+    values (${supabaseAuthId}, ${name})
     returning id
   `;
   return inserted[0].id;
@@ -44,7 +54,11 @@ export async function handleSync(c: Context): Promise<Response> {
 
   const { events } = parsed.data;
   const rejectedIndices: number[] = [];
-  const appUserId = await getOrCreateAppUserId(auth.sub, auth.email ?? null);
+  const appUserId = await getOrCreateAppUserId(
+    auth.sub,
+    auth.email ?? null,
+    auth.nickname ?? null
+  );
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i] as SyncEvent;
