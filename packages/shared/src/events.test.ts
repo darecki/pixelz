@@ -64,7 +64,7 @@ describe("syncRequestSchema", () => {
     expect(syncRequestSchema.safeParse(req).success).toBe(true);
   });
 
-  it("rejects empty events", () => {
+  it("accepts empty events", () => {
     expect(syncRequestSchema.safeParse({ events: [] }).success).toBe(true);
   });
 });

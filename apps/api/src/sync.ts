@@ -110,6 +110,7 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
         select 1 from public.scores
         where user_id = ${appUserId}::uuid and level_id = ${levelId} and seed is null
           and score = ${score} and moves = ${moves} and time_ms = ${timeMs}
+          and (move_sequence is not distinct from ${moveSequenceValue})
           and created_at > now() - interval '2 minutes'
         limit 1
       `;

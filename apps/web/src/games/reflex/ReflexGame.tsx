@@ -41,13 +41,6 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     };
   }, [levelId]);
 
-  useEffect(() => {
-    return () => {
-      if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
-      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
-    };
-  }, []);
-
   function startGame() {
     scoreSubmittedRef.current = false;
     setPhase("countdown");

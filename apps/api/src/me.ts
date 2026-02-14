@@ -50,9 +50,20 @@ export async function handleMergeAnonymous(c: Context): Promise<Response> {
   if (anonAppUserId === realAppUserId) {
     return c.json({ error: "Cannot merge same user" }, 400);
   }
-  await sql`
-    update public.scores set user_id = ${realAppUserId}::uuid where user_id = ${anonAppUserId}::uuid
-  `;
-  await sql`delete from public.app_users where id = ${anonAppUserId}::uuid`;
-  return c.json({ ok: true });
+  try {
+    await sql`begin`;
+    await sql`
+      update public.scores set user_id = ${realAppUserId}::uuid where user_id = ${anonAppUserId}::uuid
+    `;
+    await sql`delete from public.app_users where id = ${anonAppUserId}::uuid`;
+    await sql`commit`;
+    return c.json({ ok: true });
+  } catch (err) {
+    try {
+      await sql`rollback`;
+    } catch {
+      // ignore rollback errors
+    }
+    return c.json({ error: "Failed to merge anonymous user" }, 500);
+  }
 }
