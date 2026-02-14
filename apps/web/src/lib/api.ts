@@ -1,7 +1,14 @@
 import { syncRequestSchema, syncResponseSchema, leaderboardResponseSchema } from "@pixelz/shared";
+
+export const NICKNAME_TAKEN_REASON = "nickname_taken";
 import type { SyncEvent } from "@pixelz/shared";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
+export const STORAGE_KEYS = {
+  anonymousId: "pixelz_anonymous_id",
+  nickname: "pixelz_nickname",
+} as const;
 
 export type BoardParams = {
   boardId: string;
@@ -54,6 +61,19 @@ function wrapFetchError(err: unknown, context: string): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+export type RegisterAnonymousResponse = { anonymousId: string };
+
+export async function registerAnonymous(): Promise<RegisterAnonymousResponse> {
+  const res = await fetch(`${API_URL}/anon/register`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to register as guest");
+  }
+  const data = await res.json();
+  if (typeof data?.anonymousId !== "string") throw new Error("Invalid response from server");
+  return { anonymousId: data.anonymousId };
+}
+
 export async function syncEvents(accessToken: string, events: SyncEvent[]) {
   const body = syncRequestSchema.parse({ events });
   let res: Response;
@@ -80,6 +100,50 @@ export async function syncEvents(accessToken: string, events: SyncEvent[]) {
     return syncResponseSchema.parse(data);
   } catch (e) {
     throw new Error("Sync failed: invalid response from server");
+  }
+}
+
+export async function syncEventsAnon(anonymousId: string, events: SyncEvent[]) {
+  const body = syncRequestSchema.parse({ events });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Anonymous-Id": anonymousId,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw wrapFetchError(err, "Sync failed.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    const msg = (err as { error?: string; details?: string }).error ?? (err as { details?: string }).details ?? "Sync failed";
+    throw new Error(msg);
+  }
+  const data = await res.json().catch(() => null);
+  if (data == null) throw new Error("Sync failed: invalid response");
+  try {
+    return syncResponseSchema.parse(data);
+  } catch (e) {
+    throw new Error("Sync failed: invalid response from server");
+  }
+}
+
+export async function mergeAnonymous(accessToken: string, anonymousId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/users/me/merge-anonymous`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ anonymousId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to merge guest progress");
   }
 }
 

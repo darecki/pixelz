@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
+import GameOverNickname from "../../components/GameOverNickname";
 import {
   REFLEX_COLORS,
   COUNTDOWN_MS,
@@ -28,8 +29,17 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const scoreSubmittedRef = useRef(false);
 
   const pickTargetColor = useCallback(() => REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)], []);
+
+  useEffect(() => {
+    scoreSubmittedRef.current = false;
+    return () => {
+      if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+    };
+  }, [levelId]);
 
   useEffect(() => {
     return () => {
@@ -39,6 +49,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   }, []);
 
   function startGame() {
+    scoreSubmittedRef.current = false;
     setPhase("countdown");
     setRound(1);
     setCumulativeTimeMs(0);
@@ -74,6 +85,8 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     const newTotal = cumulativeTimeMs + elapsed;
     setCumulativeTimeMs(newTotal);
     if (round >= totalRounds) {
+      if (scoreSubmittedRef.current) return;
+      scoreSubmittedRef.current = true;
       appendEvent({
         type: "LEVEL_COMPLETED",
         payload: {
@@ -193,9 +206,10 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
         <p style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "1rem" }}>
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <p style={{ color: "#666", marginBottom: "1rem", fontSize: "0.9rem" }}>
+        <p style={{ color: "#666", marginBottom: "0.5rem", fontSize: "0.9rem" }}>
           {phase === "saving" ? "Saving…" : "Saved to leaderboard."}
         </p>
+        <GameOverNickname disabled={phase === "saving"} buttonStyle={ctaButtonStyle} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"

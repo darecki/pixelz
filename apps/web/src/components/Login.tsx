@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 type Mode = "signin" | "signup";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
@@ -28,6 +29,7 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        navigate("/");
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Auth failed");
@@ -96,6 +98,8 @@ export default function Login() {
         </button>
       </form>
       <p style={{ marginTop: "1rem" }}>
+        <Link to="/">Play without account</Link>
+        {" · "}
         <Link to="/leaderboard">View leaderboard</Link>
       </p>
     </div>

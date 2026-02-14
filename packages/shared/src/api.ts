@@ -19,6 +19,7 @@ export const syncResponseSchema = z.object({
   acceptedCount: z.number().int().min(0),
   rejectedCount: z.number().int().min(0),
   rejectedIndices: z.array(z.number().int()).optional(),
+  rejectedReasons: z.record(z.string()).optional(),
 });
 
 export const leaderboardResponseSchema = z.object({
