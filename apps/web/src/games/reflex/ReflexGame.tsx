@@ -206,9 +206,9 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
         <p style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "1rem" }}>
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <p style={{ color: "#666", marginBottom: "0.5rem", fontSize: "0.9rem" }}>
-          {phase === "saving" ? "Saving…" : "Saved to leaderboard."}
-        </p>
+        {phase === "saving" && (
+          <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
+        )}
         <GameOverNickname disabled={phase === "saving"} buttonStyle={ctaButtonStyle} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button

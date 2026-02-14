@@ -114,9 +114,13 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
         limit 1
       `;
       if (duplicate.length > 0) return true;
+      const userNick = await sql`
+        select nickname from public.app_users where id = ${appUserId}::uuid limit 1
+      `;
+      const nickname = userNick.length > 0 && userNick[0].nickname != null ? String(userNick[0].nickname) : null;
       await sql`
-        insert into public.scores (user_id, level_id, seed, score, moves, time_ms, move_sequence)
-        values (${appUserId}, ${levelId}, null, ${score}, ${moves}, ${timeMs}, ${moveSequenceValue})
+        insert into public.scores (user_id, level_id, seed, score, moves, time_ms, move_sequence, nickname)
+        values (${appUserId}, ${levelId}, null, ${score}, ${moves}, ${timeMs}, ${moveSequenceValue}, ${nickname})
       `;
       return true;
     }
@@ -132,9 +136,13 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
         limit 1
       `;
       if (duplicate.length > 0) return true;
+      const userNick = await sql`
+        select nickname from public.app_users where id = ${appUserId}::uuid limit 1
+      `;
+      const nickname = userNick.length > 0 && userNick[0].nickname != null ? String(userNick[0].nickname) : null;
       await sql`
-        insert into public.scores (user_id, level_id, seed, score, moves, time_ms)
-        values (${appUserId}, ${levelIdRandom}, ${seed}, ${score}, ${moves}, ${timeMs})
+        insert into public.scores (user_id, level_id, seed, score, moves, time_ms, nickname)
+        values (${appUserId}, ${levelIdRandom}, ${seed}, ${score}, ${moves}, ${timeMs}, ${nickname})
       `;
       return true;
     }
@@ -150,6 +158,30 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
       }
       await sql`
         update public.app_users set nickname = ${trimmed} where id = ${appUserId}
+      `;
+      return true;
+    }
+    case "UPDATE_LAST_SCORE_NICKNAME": {
+      const { nickname } = event.payload;
+      const trimmed = nickname.trim();
+      const existing = await sql`
+        select id, supabase_auth_id from public.app_users
+        where lower(trim(nickname)) = lower(${trimmed}) and id != ${appUserId}::uuid
+      `;
+      if (isNicknameTakenBySignedInUser(existing as unknown as { supabase_auth_id: string | null }[])) {
+        return { reason: NICKNAME_TAKEN_REASON };
+      }
+      await sql`
+        update public.app_users set nickname = ${trimmed} where id = ${appUserId}
+      `;
+      await sql`
+        update public.scores set nickname = ${trimmed}
+        where id = (
+          select id from public.scores
+          where user_id = ${appUserId}::uuid
+          order by created_at desc
+          limit 1
+        )
       `;
       return true;
     }

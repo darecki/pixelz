@@ -47,6 +47,11 @@ describe("syncEvent", () => {
     const event = { type: "SET_NICKNAME", payload: { nickname: "a".repeat(33) } };
     expect(setNicknameEvent.safeParse(event).success).toBe(false);
   });
+
+  it("accepts valid UPDATE_LAST_SCORE_NICKNAME", () => {
+    const event = { type: "UPDATE_LAST_SCORE_NICKNAME", payload: { nickname: "player2" } };
+    expect(syncEvent.safeParse(event).success).toBe(true);
+  });
 });
 
 describe("syncRequestSchema", () => {

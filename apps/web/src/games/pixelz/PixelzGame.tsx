@@ -164,9 +164,9 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         <p style={{ fontSize: "clamp(1rem, 4vmin, 1.25rem)", marginBottom: "0.5rem" }}>
           Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <p style={{ color: "#666", marginBottom: "0.5rem", fontSize: "0.9rem" }}>
-          {saving ? "Saving…" : "Saved to leaderboard."}
-        </p>
+        {saving && (
+          <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
+        )}
         <GameOverNickname disabled={saving} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button

@@ -64,7 +64,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
             s.time_ms,
             to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
             u.id as user_id,
-            u.nickname
+            coalesce(s.nickname, u.nickname) as nickname
           from public.scores s
           join public.app_users u on u.id = s.user_id
           where s.level_id = ${levelId}
@@ -78,7 +78,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
             s.time_ms,
             to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
             u.id as user_id,
-            u.nickname
+            coalesce(s.nickname, u.nickname) as nickname
           from public.scores s
           join public.app_users u on u.id = s.user_id
           where s.level_id = ${levelId}
