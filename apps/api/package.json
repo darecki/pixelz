@@ -5,7 +5,8 @@
   "scripts": {
     "build": "pnpm --prefix ../.. --filter @pixelz/shared run build && tsc",
     "dev": "tsx watch src/index.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

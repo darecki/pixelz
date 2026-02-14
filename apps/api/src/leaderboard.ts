@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { leaderboardResponseSchema } from "@pixelz/shared";
+import { leaderboardResponseSchema, isPixelzBoardId } from "@pixelz/shared";
 import { GAME } from "@pixelz/shared";
 import { sql } from "./db.js";
 import { verifyTokenOptional } from "./auth.js";
@@ -52,7 +52,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
     throw err;
   }
 
-  const lowerIsBetter = levelId.startsWith("reflex_");
+  const lowerIsBetter = levelId.startsWith("reflex_") || isPixelzBoardId(levelId);
 
   try {
     const raw = await Promise.race([
@@ -68,7 +68,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
           from public.scores s
           join public.app_users u on u.id = s.user_id
           where s.level_id = ${levelId}
-          order by s.time_ms asc, s.score desc
+          order by s.score asc, s.time_ms asc
           limit ${GAME.LEADERBOARD_TOP_N}
         `
         : sql`

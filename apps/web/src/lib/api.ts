@@ -3,6 +3,50 @@ import type { SyncEvent } from "@pixelz/shared";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+export type BoardParams = {
+  boardId: string;
+  width: number;
+  height: number;
+  numColors: number;
+  seed: string;
+};
+
+export async function createBoard(params: {
+  width?: number;
+  height?: number;
+  numColors?: number;
+}): Promise<BoardParams> {
+  const res = await fetch(`${API_URL}/boards`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to create board");
+  }
+  return res.json();
+}
+
+export async function fetchBoard(boardId: string): Promise<BoardParams> {
+  const res = await fetch(`${API_URL}/boards/${encodeURIComponent(boardId)}`);
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("Board not found");
+    throw new Error("Failed to load board");
+  }
+  return res.json();
+}
+
+export type MyBoardsResponse = { boardIds: string[] };
+
+export async function fetchMyPlayedBoards(accessToken: string): Promise<MyBoardsResponse> {
+  const res = await fetch(`${API_URL}/users/me/boards`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error("Failed to load your boards");
+  return res.json();
+}
+
 function wrapFetchError(err: unknown, context: string): Error {
   if (err instanceof TypeError && err.message === "Failed to fetch") {
     return new Error(`${context} Could not reach API at ${API_URL}. Is the API running? (pnpm dev:api)`);

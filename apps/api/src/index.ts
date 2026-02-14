@@ -4,6 +4,8 @@ import { cors } from "hono/cors";
 import { authMiddleware } from "./auth.js";
 import { handleSync } from "./sync.js";
 import { handleLeaderboard } from "./leaderboard.js";
+import { handleCreateBoard, handleGetBoard } from "./boards.js";
+import { handleMyBoards } from "./me.js";
 
 const app = new Hono();
 app.onError((err, c) => {
@@ -44,6 +46,12 @@ app.get("/", (c) => c.json({ name: "pixelz-api", status: "ok" }));
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.get("/leaderboards/:levelId", handleLeaderboard);
+
+app.post("/boards", handleCreateBoard);
+app.get("/boards/:boardId", handleGetBoard);
+
+app.use("/users/me", authMiddleware);
+app.get("/users/me/boards", handleMyBoards);
 
 app.use("/sync", authMiddleware);
 app.post("/sync", handleSync);

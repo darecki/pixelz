@@ -77,11 +77,18 @@ export async function handleSync(c: Context): Promise<Response> {
 async function processEvent(event: SyncEvent, appUserId: string): Promise<boolean> {
   switch (event.type) {
     case "LEVEL_COMPLETED": {
-      const { levelId, score, moves, timeMs } = event.payload;
+      const { levelId, score, moves, timeMs, moveSequence } = event.payload;
       if (!validateScore(score, moves, timeMs)) return false;
+      if (moveSequence !== undefined) {
+        if (moveSequence.length !== moves) return false;
+        const maxColorIndex = 9;
+        if (moveSequence.some((v) => v < 0 || v > maxColorIndex)) return false;
+      }
+      const moveSequenceValue =
+        moveSequence !== undefined && moveSequence.length > 0 ? moveSequence : null;
       await sql`
-        insert into public.scores (user_id, level_id, seed, score, moves, time_ms)
-        values (${appUserId}, ${levelId}, null, ${score}, ${moves}, ${timeMs})
+        insert into public.scores (user_id, level_id, seed, score, moves, time_ms, move_sequence)
+        values (${appUserId}, ${levelId}, null, ${score}, ${moves}, ${timeMs}, ${moveSequenceValue})
       `;
       return true;
     }

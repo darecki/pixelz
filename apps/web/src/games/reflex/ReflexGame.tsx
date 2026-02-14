@@ -199,7 +199,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"
-            onClick={() => navigate(`/leaderboard?level=${encodeURIComponent(levelId)}&justFinished=1`)}
+            onClick={() => navigate(`/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`)}
             style={ctaButtonStyle}
             disabled={phase === "saving"}
           >
