@@ -145,7 +145,7 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
         select id, supabase_auth_id from public.app_users
         where lower(trim(nickname)) = lower(${trimmed}) and id != ${appUserId}::uuid
       `;
-      if (isNicknameTakenBySignedInUser(existing as { supabase_auth_id: string | null }[])) {
+      if (isNicknameTakenBySignedInUser(existing as unknown as { supabase_auth_id: string | null }[])) {
         return { reason: NICKNAME_TAKEN_REASON };
       }
       await sql`
