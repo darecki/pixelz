@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getGameById, isReflexLevel } from "../games/registry";
+import { getGameById, isReflexLevel, isPixelzBoardId } from "../games/registry";
 import PlayStub from "./PlayStub";
 
 export default function Play() {
@@ -8,7 +8,13 @@ export default function Play() {
   const gameId = searchParams.get("game");
   const levelId = searchParams.get("level") ?? "level_1";
 
-  const game = gameId ? getGameById(gameId) : isReflexLevel(levelId) ? getGameById("reflex") : null;
+  const game = gameId
+    ? getGameById(gameId)
+    : isReflexLevel(levelId)
+      ? getGameById("reflex")
+      : isPixelzBoardId(levelId)
+        ? getGameById("pixelz")
+        : null;
   const effectiveLevel =
     game?.id === "reflex"
       ? (game.levelIds.includes(levelId) ? levelId : game.levelIds[0])
@@ -19,6 +25,15 @@ export default function Play() {
     return (
       <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center" }}>Loading…</div>}>
         <ReflexGame levelId={effectiveLevel} />
+      </Suspense>
+    );
+  }
+
+  if (game?.id === "pixelz" && levelId) {
+    const PixelzGame = game.component;
+    return (
+      <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center" }}>Loading…</div>}>
+        <PixelzGame levelId={levelId} />
       </Suspense>
     );
   }

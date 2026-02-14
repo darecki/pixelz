@@ -5,6 +5,8 @@ const levelCompletedPayload = z.object({
   score: z.number().int().min(0),
   moves: z.number().int().min(0),
   timeMs: z.number().int().min(0),
+  /** Optional move-by-move replay (e.g. Pixelz: color index per move). */
+  moveSequence: z.array(z.number().int().min(0)).optional(),
 });
 
 const randomLevelPlayedPayload = z.object({

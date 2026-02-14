@@ -1,7 +1,7 @@
-import { REFLEX_LEVEL_IDS } from "@pixelz/shared";
+import { REFLEX_LEVEL_IDS, isPixelzBoardId } from "@pixelz/shared";
 import { lazy } from "react";
 
-export type GameLevelType = "predefined" | "random" | "none";
+export type GameLevelType = "predefined" | "random" | "none" | "board";
 
 export type GameDef = {
   id: string;
@@ -19,6 +19,13 @@ export const GAMES: GameDef[] = [
     levelIds: REFLEX_LEVEL_IDS,
     component: lazy(() => import("./reflex/ReflexGame")),
   },
+  {
+    id: "pixelz",
+    name: "Pixelz",
+    levelType: "board",
+    levelIds: [],
+    component: lazy(() => import("./pixelz/PixelzGame")),
+  },
 ];
 
 export function getGameById(id: string): GameDef | undefined {
@@ -28,3 +35,5 @@ export function getGameById(id: string): GameDef | undefined {
 export function isReflexLevel(levelId: string): boolean {
   return levelId.startsWith("reflex_");
 }
+
+export { isPixelzBoardId };
