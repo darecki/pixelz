@@ -28,20 +28,25 @@ export default function GameOverNickname({ disabled, buttonStyle }: Props) {
     e.preventDefault();
     const nickname = editValue.trim();
     if (nickname.length < NICKNAME_MIN || nickname.length > NICKNAME_MAX) return;
+    const previousNickname = displayNickname;
     setUpdating(true);
     setError(null);
     try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEYS.nickname, nickname);
       appendEvent({ type: "UPDATE_LAST_SCORE_NICKNAME", payload: { nickname } });
       const result = await performSync();
       const hasNicknameTaken = result?.rejectedReasons && Object.values(result.rejectedReasons).includes(NICKNAME_TAKEN_REASON);
       if (hasNicknameTaken) {
         setError("Username already taken");
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem(STORAGE_KEYS.nickname, previousNickname === nickname ? "" : previousNickname);
+        }
+        setDisplayNickname(previousNickname === nickname ? "" : previousNickname);
         const pending = await getPendingEvents();
-        if (pending.length > 0 && pending[0].type === "SET_NICKNAME") {
+        if (pending.length > 0 && (pending[0].type === "SET_NICKNAME" || pending[0].type === "UPDATE_LAST_SCORE_NICKNAME")) {
           await removeFirstEvents(1);
         }
       } else {
+        if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEYS.nickname, nickname);
         setDisplayNickname(nickname);
         setEditing(false);
       }
