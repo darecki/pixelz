@@ -6,6 +6,7 @@ import Login from "./components/Login";
 import Home from "./pages/Home";
 import Leaderboard from "./pages/Leaderboard";
 import Play from "./pages/Play";
+import { mergeAnonymous, STORAGE_KEYS } from "./lib/api";
 
 function Layout({ session, children }: { session: Session | null; children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -15,17 +16,23 @@ function Layout({ session, children }: { session: Session | null; children: Reac
     navigate("/");
   }
 
-  if (!session) {
-    return <>{children}</>;
-  }
-
   return (
     <div>
       <nav style={{ padding: "0.5rem 1rem", borderBottom: "1px solid #ccc", marginBottom: "1rem" }}>
-        <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
-        <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
-        <span style={{ marginRight: "1rem", color: "#666" }}>{session.user.email}</span>
-        <button type="button" onClick={signOut} style={{ padding: "0.25rem 0.5rem" }}>Sign out</button>
+        {session ? (
+          <>
+            <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
+            <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
+            <span style={{ marginRight: "1rem", color: "#666" }}>{session.user.email}</span>
+            <button type="button" onClick={signOut} style={{ padding: "0.25rem 0.5rem" }}>Sign out</button>
+          </>
+        ) : (
+          <>
+            <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
+            <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
+            <Link to="/login" style={{ marginRight: "1rem" }}>Sign in</Link>
+          </>
+        )}
       </nav>
       {children}
     </div>
@@ -36,13 +43,28 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  function runMergeIfAnon(session: { access_token: string }) {
+    const anonId = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEYS.anonymousId) : null;
+    if (!anonId) return;
+    mergeAnonymous(session.access_token, anonId)
+      .then(() => {
+        if (typeof localStorage !== "undefined") {
+          localStorage.removeItem(STORAGE_KEYS.anonymousId);
+          localStorage.removeItem(STORAGE_KEYS.nickname);
+        }
+      })
+      .catch(() => {});
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session?.access_token) runMergeIfAnon(session);
       setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.access_token) runMergeIfAnon(session);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -55,7 +77,8 @@ export default function App() {
     <BrowserRouter>
       <Layout session={session}>
         <Routes>
-          <Route path="/" element={session ? <Home /> : <Login />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/play" element={<Play />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Routes>

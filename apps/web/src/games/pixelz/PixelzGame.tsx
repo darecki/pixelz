@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
 import { fetchBoard } from "../../lib/api";
+import GameOverNickname from "../../components/GameOverNickname";
 import { computePixelzScore } from "@pixelz/shared";
 import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
@@ -55,9 +56,11 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
   const [won, setWon] = useState(false);
   const [timeMs, setTimeMs] = useState(0);
   const [saving, setSaving] = useState(false);
+  const scoreSubmittedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    scoreSubmittedRef.current = false;
     setLoading(true);
     setError(null);
     fetchBoard(levelId)
@@ -95,6 +98,8 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
       setMoves((m) => m + 1);
       setMoveSequence((seq) => [...seq, colorIndex]);
       if (isFilled(nextGrid)) {
+        if (scoreSubmittedRef.current) return;
+        scoreSubmittedRef.current = true;
         const elapsed = Math.floor(Date.now() - start);
         setTimeMs(elapsed);
         setWon(true);
@@ -159,9 +164,10 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         <p style={{ fontSize: "clamp(1rem, 4vmin, 1.25rem)", marginBottom: "0.5rem" }}>
           Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <p style={{ color: "#666", marginBottom: "1rem", fontSize: "0.9rem" }}>
-          {saving ? "Saving…" : "Saved to leaderboard."}
-        </p>
+        {saving && (
+          <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
+        )}
+        <GameOverNickname disabled={saving} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"

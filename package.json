@@ -7,7 +7,8 @@
     "dev:api": "pnpm --filter api run dev",
     "dev:web": "pnpm --filter web run dev",
     "lint": "pnpm -r run lint",
-    "migrate": "pnpm --filter api run migrate"
+    "migrate": "pnpm --filter api run migrate",
+    "test": "pnpm --filter api run test && pnpm --filter @pixelz/shared run test"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

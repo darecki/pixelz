@@ -43,6 +43,12 @@ export const setNicknameEvent = z.object({
   clientTimestamp: z.number().int().optional(),
 });
 
+export const updateLastScoreNicknameEvent = z.object({
+  type: z.literal("UPDATE_LAST_SCORE_NICKNAME"),
+  payload: setNicknamePayload,
+  clientTimestamp: z.number().int().optional(),
+});
+
 export const createChallengeEvent = z.object({
   type: z.literal("CREATE_CHALLENGE"),
   payload: createChallengePayload,
@@ -53,6 +59,7 @@ export const syncEvent = z.discriminatedUnion("type", [
   levelCompletedEvent,
   randomLevelPlayedEvent,
   setNicknameEvent,
+  updateLastScoreNicknameEvent,
   createChallengeEvent,
 ]);
 
@@ -60,4 +67,5 @@ export type SyncEvent = z.infer<typeof syncEvent>;
 export type LevelCompletedEvent = z.infer<typeof levelCompletedEvent>;
 export type RandomLevelPlayedEvent = z.infer<typeof randomLevelPlayedEvent>;
 export type SetNicknameEvent = z.infer<typeof setNicknameEvent>;
+export type UpdateLastScoreNicknameEvent = z.infer<typeof updateLastScoreNicknameEvent>;
 export type CreateChallengeEvent = z.infer<typeof createChallengeEvent>;

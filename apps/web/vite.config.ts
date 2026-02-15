@@ -13,4 +13,10 @@ export default defineConfig({
   ],
   server: { port: 5173 },
   envDir: path.resolve(__dirname, "../.."),
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["src/test/setup.ts"],
+    globals: true,
+  },
 });
