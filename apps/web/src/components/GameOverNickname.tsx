@@ -20,8 +20,10 @@ export default function GameOverNickname({ disabled, buttonStyle }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEYS.nickname) ?? "" : "";
-    setDisplayNickname(stored);
+    if (typeof localStorage === "undefined") return;
+    const stored = localStorage.getItem(STORAGE_KEYS.nickname) ?? "";
+    const anonId = localStorage.getItem(STORAGE_KEYS.anonymousId) ?? "";
+    setDisplayNickname(stored.trim() || anonId);
   }, []);
 
   async function handleUpdate(e: React.FormEvent) {
