@@ -112,12 +112,25 @@ export async function handleSync(c: Context): Promise<Response> {
 }
 
 const NICKNAME_TAKEN_REASON = "nickname_taken";
+const ANONYMOUS_SCORE_REJECTED_REASON = "anonymous_score_rejected";
 
 type ProcessResult = true | { reason: string };
+
+async function isAnonymousUser(appUserId: string): Promise<boolean> {
+  const rows = await sql`
+    select supabase_auth_id, anonymous_id from public.app_users where id = ${appUserId}::uuid limit 1
+  `;
+  if (rows.length === 0) return true;
+  const row = rows[0];
+  return row.supabase_auth_id == null && row.anonymous_id != null;
+}
 
 async function processEvent(event: SyncEvent, appUserId: string): Promise<ProcessResult> {
   switch (event.type) {
     case "LEVEL_COMPLETED": {
+      if (await isAnonymousUser(appUserId)) {
+        return { reason: ANONYMOUS_SCORE_REJECTED_REASON };
+      }
       const { levelId, score, moves, timeMs, moveSequence } = event.payload;
       if (!validateScore(score, moves, timeMs, levelId, "LEVEL_COMPLETED")) return false as ProcessResult;
       if (moveSequence !== undefined) {
@@ -148,6 +161,9 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
       return true;
     }
     case "RANDOM_LEVEL_PLAYED": {
+      if (await isAnonymousUser(appUserId)) {
+        return { reason: ANONYMOUS_SCORE_REJECTED_REASON };
+      }
       const { seed, score, moves, timeMs } = event.payload;
       if (!validateScore(score, moves, timeMs, "random", "RANDOM_LEVEL_PLAYED")) return false as ProcessResult;
       const levelIdRandom = "random";

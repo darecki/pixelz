@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { performSync } from "../lib/sync";
 
 type Mode = "signin" | "signup";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
@@ -29,7 +32,16 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/");
+        
+        const pendingScore = sessionStorage.getItem("pixelz_pending_score");
+        if (pendingScore) {
+          sessionStorage.removeItem("pixelz_pending_score");
+          try {
+            await performSync();
+          } catch {}
+        }
+        
+        navigate(redirect);
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Auth failed");

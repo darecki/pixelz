@@ -2,7 +2,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
+import { fetchLeaderboard, STORAGE_KEYS } from "../../lib/api";
+import { supabase } from "../../lib/supabase";
 import GameOverNickname from "../../components/GameOverNickname";
+import SignInPrompt from "../../components/SignInPrompt";
 import {
   REFLEX_COLORS,
   COUNTDOWN_MS,
@@ -11,10 +14,15 @@ import {
 } from "./constants";
 import { useBeep } from "./useBeep";
 
-type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished";
+type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting";
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
 const KEYBOARD_KEYS = ["q", "w", "e", "p"] as const;
+
+function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
+  if (leaderboardSize < 100) return rank <= 10;
+  return rank <= Math.ceil(leaderboardSize * 0.1);
+}
 
 export default function ReflexGame({ levelId }: { levelId: string }) {
   const navigate = useNavigate();
@@ -26,11 +34,13 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   const [cumulativeTimeMs, setCumulativeTimeMs] = useState(0);
   const [countdownStep, setCountdownStep] = useState(0);
   const [targetColor, setTargetColor] = useState<string | null>(null);
+  const [promptRank, setPromptRank] = useState(0);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scoreSubmittedRef = useRef(false);
+  const pendingScoreRef = useRef<{ moves: number; timeMs: number } | null>(null);
 
   const pickTargetColor = useCallback(() => REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)], []);
 
@@ -94,19 +104,58 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     if (round >= totalRounds) {
       if (scoreSubmittedRef.current) return;
       scoreSubmittedRef.current = true;
-      appendEvent({
-        type: "LEVEL_COMPLETED",
-        payload: {
-          levelId,
-          score: 0,
-          moves: totalRounds,
-          timeMs: newTotal,
-        },
-      });
-      setPhase("saving");
-      performSync()
-        .catch(() => {})
-        .finally(() => setPhase("finished"));
+      
+      const checkAuthAndPrompt = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.access_token) {
+          appendEvent({
+            type: "LEVEL_COMPLETED",
+            payload: {
+              levelId,
+              score: 0,
+              moves: totalRounds,
+              timeMs: newTotal,
+            },
+          });
+          setPhase("saving");
+          performSync()
+            .catch(() => {})
+            .finally(() => setPhase("finished"));
+        } else {
+          const dontRemind = localStorage.getItem(STORAGE_KEYS.dontRemindSignin) === "true";
+          if (dontRemind) {
+            setPhase("finished");
+            return;
+          }
+          
+          try {
+            const leaderboard = await fetchLeaderboard(levelId);
+            const entries = leaderboard.entries;
+            let rank = entries.length + 1;
+            
+            for (let i = 0; i < entries.length; i++) {
+              const entry = entries[i];
+              if (newTotal < entry.timeMs) {
+                rank = i + 1;
+                break;
+              }
+            }
+            
+            if (qualifiesForPrompt(rank, entries.length)) {
+              pendingScoreRef.current = { moves: totalRounds, timeMs: newTotal };
+              setPromptRank(rank);
+              setPhase("prompting");
+            } else {
+              setPhase("finished");
+            }
+          } catch {
+            setPhase("finished");
+          }
+        }
+      };
+      
+      checkAuthAndPrompt();
       return;
     }
     setPhase("delay");
@@ -206,6 +255,29 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     );
   }
 
+  if (phase === "prompting") {
+    return (
+      <div style={containerStyle}>
+        <SignInPrompt
+          rank={promptRank}
+          onSignIn={() => {
+            const score = pendingScoreRef.current;
+            if (score) {
+              sessionStorage.setItem(
+                "pixelz_pending_score",
+                JSON.stringify({ levelId, ...score })
+              );
+            }
+            navigate(`/login?redirect=/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`);
+          }}
+          onSkip={() => {
+            setPhase("finished");
+          }}
+        />
+      </div>
+    );
+  }
+
   if (phase === "saving" || phase === "finished") {
     return (
       <div style={containerStyle}>
@@ -216,7 +288,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
         {phase === "saving" && (
           <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
         )}
-        <GameOverNickname disabled={phase === "saving"} buttonStyle={ctaButtonStyle} />
+        <GameOverNickname disabled={phase === "saving"} buttonStyle={ctaButtonStyle} hideIfNoAuth={true} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"

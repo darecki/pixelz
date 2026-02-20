@@ -2,13 +2,20 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
-import { fetchBoard } from "../../lib/api";
+import { fetchBoard, fetchLeaderboard, STORAGE_KEYS } from "../../lib/api";
+import { supabase } from "../../lib/supabase";
 import GameOverNickname from "../../components/GameOverNickname";
+import SignInPrompt from "../../components/SignInPrompt";
 import { computePixelzScore } from "@pixelz/shared";
 import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
 
 const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+
+function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
+  if (leaderboardSize < 100) return rank <= 10;
+  return rank <= Math.ceil(leaderboardSize * 0.1);
+}
 
 function applyFloodFill(
   grid: number[][],
@@ -58,7 +65,10 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
   const [won, setWon] = useState(false);
   const [timeMs, setTimeMs] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+  const [promptRank, setPromptRank] = useState(0);
   const scoreSubmittedRef = useRef(false);
+  const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,23 +114,66 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         scoreSubmittedRef.current = true;
         const elapsed = Math.floor(Date.now() - start);
         setTimeMs(elapsed);
-        setWon(true);
         const finalMoves = moves + 1;
         const score = computePixelzScore(finalMoves, elapsed);
-        appendEvent({
-          type: "LEVEL_COMPLETED",
-          payload: {
-            levelId,
-            score,
-            moves: finalMoves,
-            timeMs: elapsed,
-            moveSequence: [...moveSequence, colorIndex],
-          },
-        });
-        setSaving(true);
-        performSync()
-          .catch(() => {})
-          .finally(() => setSaving(false));
+        const seq = [...moveSequence, colorIndex];
+
+        const checkAuthAndPrompt = async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.access_token) {
+            appendEvent({
+              type: "LEVEL_COMPLETED",
+              payload: {
+                levelId,
+                score,
+                moves: finalMoves,
+                timeMs: elapsed,
+                moveSequence: seq,
+              },
+            });
+            setSaving(true);
+            performSync()
+              .catch(() => {})
+              .finally(() => {
+                setSaving(false);
+                setWon(true);
+              });
+          } else {
+            const dontRemind = localStorage.getItem(STORAGE_KEYS.dontRemindSignin) === "true";
+            if (dontRemind) {
+              setWon(true);
+              return;
+            }
+            
+            try {
+              const leaderboard = await fetchLeaderboard(levelId);
+              const lowerIsBetter = true;
+              const entries = leaderboard.entries;
+              let rank = entries.length + 1;
+              
+              for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                if (lowerIsBetter ? score < entry.score : score > entry.score) {
+                  rank = i + 1;
+                  break;
+                }
+              }
+              
+              if (qualifiesForPrompt(rank, entries.length)) {
+                pendingScoreRef.current = { score, moves: finalMoves, timeMs: elapsed, moveSequence: seq };
+                setPromptRank(rank);
+                setShowSignInPrompt(true);
+              } else {
+                setWon(true);
+              }
+            } catch {
+              setWon(true);
+            }
+          }
+        };
+        
+        checkAuthAndPrompt();
       }
     },
     [grid, won, startTime, moves, moveSequence, levelId]
@@ -182,7 +235,7 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         {saving && (
           <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
         )}
-        <GameOverNickname disabled={saving} />
+        {!showSignInPrompt && <GameOverNickname disabled={saving} hideIfNoAuth={true} />}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
           <button
             type="button"
@@ -254,10 +307,29 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
               cursor: "pointer",
               touchAction: "manipulation",
             }}
-            aria-label={`Color ${i + 1}`}
+              aria-label={`Color ${i + 1}`}
           />
         ))}
       </div>
+      {showSignInPrompt && (
+        <SignInPrompt
+          rank={promptRank}
+          onSignIn={() => {
+            const score = pendingScoreRef.current;
+            if (score) {
+              sessionStorage.setItem(
+                "pixelz_pending_score",
+                JSON.stringify({ levelId, ...score })
+              );
+            }
+            navigate(`/login?redirect=/leaderboard?game=pixelz&level=${encodeURIComponent(levelId)}&justFinished=1`);
+          }}
+          onSkip={() => {
+            setShowSignInPrompt(false);
+            setWon(true);
+          }}
+        />
+      )}
     </div>
   );
 }
