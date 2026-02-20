@@ -5,25 +5,36 @@ vi.mock("./db.js", () => ({ sql: vi.fn() }));
 
 describe("validateScore", () => {
   it("accepts valid score within bounds", () => {
-    expect(validateScore(0, 0, 0)).toBe(true);
-    expect(validateScore(100, 5, 1000)).toBe(true);
-    expect(validateScore(1_000_000, 0, 0)).toBe(true);
+    expect(validateScore(0, 5, 1000, "reflex_level_0", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(0, 10, 5000, "reflex_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(1_000_000, 0, 0, "random", "RANDOM_LEVEL_PLAYED")).toBe(true);
   });
 
   it("rejects negative score", () => {
-    expect(validateScore(-1, 0, 0)).toBe(false);
+    expect(validateScore(-1, 0, 0, "reflex_level_0", "LEVEL_COMPLETED")).toBe(false);
   });
 
   it("rejects score above MAX_SCORE", () => {
-    expect(validateScore(1_000_001, 0, 0)).toBe(false);
+    expect(validateScore(1_000_001, 0, 0, "reflex_level_0", "LEVEL_COMPLETED")).toBe(false);
   });
 
   it("rejects negative moves", () => {
-    expect(validateScore(0, -1, 0)).toBe(false);
+    expect(validateScore(0, -1, 0, "reflex_level_0", "LEVEL_COMPLETED")).toBe(false);
   });
 
   it("rejects negative timeMs", () => {
-    expect(validateScore(0, 0, -1)).toBe(false);
+    expect(validateScore(0, 0, -1, "reflex_level_0", "LEVEL_COMPLETED")).toBe(false);
+  });
+
+  it("validates pixelz score correctly", () => {
+    expect(validateScore(5000, 0, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(15000, 1, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(10000, 0, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(false);
+  });
+
+  it("validates reflex score must be 0", () => {
+    expect(validateScore(0, 10, 5000, "reflex_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(100, 10, 5000, "reflex_level_1", "LEVEL_COMPLETED")).toBe(false);
   });
 });
 

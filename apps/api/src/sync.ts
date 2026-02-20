@@ -3,15 +3,36 @@ import {
   syncRequestSchema,
   syncResponseSchema,
   type SyncEvent,
+  GAME,
+  computePixelzScore,
+  REFLEX_LEVELS,
 } from "@pixelz/shared";
-import { GAME } from "@pixelz/shared";
 import { sql } from "./db.js";
 import type { AuthPayload, SyncAuth } from "./auth.js";
+import { ENV } from "./env.js";
 
 /** Exported for unit tests. */
-export function validateScore(score: number, moves: number, timeMs: number): boolean {
+export function validateScore(
+  score: number,
+  moves: number,
+  timeMs: number,
+  levelId: string,
+  eventType: "LEVEL_COMPLETED" | "RANDOM_LEVEL_PLAYED"
+): boolean {
   if (score < 0 || score > GAME.MAX_SCORE) return false;
   if (moves < 0 || timeMs < 0) return false;
+
+  if (eventType === "LEVEL_COMPLETED") {
+    if (levelId.startsWith("pixelz_")) {
+      const expectedScore = computePixelzScore(moves, timeMs);
+      if (score !== expectedScore) return false;
+    } else if (levelId.startsWith("reflex_")) {
+      const rounds = REFLEX_LEVELS[levelId as keyof typeof REFLEX_LEVELS];
+      if (rounds !== undefined && moves !== rounds) return false;
+      if (score !== 0) return false;
+    }
+  }
+
   return true;
 }
 
@@ -98,7 +119,7 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
   switch (event.type) {
     case "LEVEL_COMPLETED": {
       const { levelId, score, moves, timeMs, moveSequence } = event.payload;
-      if (!validateScore(score, moves, timeMs)) return false as ProcessResult;
+      if (!validateScore(score, moves, timeMs, levelId, "LEVEL_COMPLETED")) return false as ProcessResult;
       if (moveSequence !== undefined) {
         if (moveSequence.length !== moves) return false as ProcessResult;
         const maxColorIndex = 9;
@@ -106,12 +127,13 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
       }
       const moveSequenceValue =
         moveSequence !== undefined && moveSequence.length > 0 ? moveSequence : null;
+      const duplicateWindowMs = ENV.DUPLICATE_SCORE_WINDOW_MS;
       const duplicate = await sql`
         select 1 from public.scores
         where user_id = ${appUserId}::uuid and level_id = ${levelId} and seed is null
           and score = ${score} and moves = ${moves} and time_ms = ${timeMs}
           and (move_sequence is not distinct from ${moveSequenceValue})
-          and created_at > now() - interval '2 minutes'
+          and created_at > now() - ${Math.floor(duplicateWindowMs / 1000)} * interval '1 second'
         limit 1
       `;
       if (duplicate.length > 0) return true;
@@ -127,13 +149,14 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
     }
     case "RANDOM_LEVEL_PLAYED": {
       const { seed, score, moves, timeMs } = event.payload;
-      if (!validateScore(score, moves, timeMs)) return false as ProcessResult;
+      if (!validateScore(score, moves, timeMs, "random", "RANDOM_LEVEL_PLAYED")) return false as ProcessResult;
       const levelIdRandom = "random";
+      const duplicateWindowMs = ENV.DUPLICATE_SCORE_WINDOW_MS;
       const duplicate = await sql`
         select 1 from public.scores
         where user_id = ${appUserId}::uuid and level_id = ${levelIdRandom} and seed = ${seed}
           and score = ${score} and moves = ${moves} and time_ms = ${timeMs}
-          and created_at > now() - interval '2 minutes'
+          and created_at > now() - ${Math.floor(duplicateWindowMs / 1000)} * interval '1 second'
         limit 1
       `;
       if (duplicate.length > 0) return true;

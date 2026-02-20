@@ -11,3 +11,9 @@ if (process.env.VERCEL !== "1") {
     if (result.parsed) break;
   }
 }
+
+export const ENV = {
+  DUPLICATE_SCORE_WINDOW_MS: Number(process.env.DUPLICATE_SCORE_WINDOW_MS) || 2 * 60 * 1000,
+  RATE_LIMIT_SYNC_REQUESTS: Number(process.env.RATE_LIMIT_SYNC_REQUESTS) || 100,
+  RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000,
+} as const;

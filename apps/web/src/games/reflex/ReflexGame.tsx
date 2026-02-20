@@ -14,6 +14,7 @@ import { useBeep } from "./useBeep";
 type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished";
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
+const KEYBOARD_KEYS = ["q", "w", "e", "p"] as const;
 
 export default function ReflexGame({ levelId }: { levelId: string }) {
   const navigate = useNavigate();
@@ -49,6 +50,19 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     setCountdownStep(0);
     setTargetColor(null);
   }
+
+  useEffect(() => {
+    if (phase !== "reaction") return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const keyIndex = KEYBOARD_KEYS.indexOf(e.key.toLowerCase() as (typeof KEYBOARD_KEYS)[number]);
+      if (keyIndex >= 0 && keyIndex < REFLEX_COLORS.length) {
+        e.preventDefault();
+        handleButtonClick(REFLEX_COLORS[keyIndex]);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== "countdown") return;

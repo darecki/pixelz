@@ -8,6 +8,8 @@ import { computePixelzScore } from "@pixelz/shared";
 import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
 
+const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+
 function applyFloodFill(
   grid: number[][],
   fromColor: number,
@@ -123,6 +125,19 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
     },
     [grid, won, startTime, moves, moveSequence, levelId]
   );
+
+  useEffect(() => {
+    if (won || loading || !grid) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const keyIndex = KEYBOARD_KEYS.indexOf(e.key as (typeof KEYBOARD_KEYS)[number]);
+      if (keyIndex >= 0 && keyIndex < numColors) {
+        e.preventDefault();
+        handleColorClick(keyIndex);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [won, loading, grid, numColors, handleColorClick]);
 
   const containerStyle: React.CSSProperties = {
     padding: "clamp(0.5rem, 2vmin, 1rem)",

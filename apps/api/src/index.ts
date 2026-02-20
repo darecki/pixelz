@@ -1,14 +1,20 @@
 import "./env.js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { authMiddleware, syncAuthMiddleware } from "./auth.js";
+import { authMiddleware, syncAuthMiddleware, type SyncAuth } from "./auth.js";
 import { handleSync } from "./sync.js";
 import { handleLeaderboard } from "./leaderboard.js";
 import { handleCreateBoard, handleGetBoard } from "./boards.js";
 import { handleMyBoards, handleMergeAnonymous } from "./me.js";
 import { handleAnonRegister } from "./anon.js";
+import { checkRateLimit } from "./rateLimit.js";
 
-const app = new Hono();
+type AppVariables = {
+  auth: SyncAuth;
+};
+
+const app = new Hono<{ Variables: AppVariables }>();
+
 app.onError((err, c) => {
   const message = err.message ?? String(err);
   console.error("[api]", message);
@@ -58,6 +64,14 @@ app.get("/users/me/boards", handleMyBoards);
 app.post("/users/me/merge-anonymous", handleMergeAnonymous);
 
 app.use("/sync", syncAuthMiddleware);
+app.post("/sync", async (c, next) => {
+  const auth = c.get("auth") as { anonymousAppUserId?: string; sub?: string };
+  const identifier = auth.anonymousAppUserId ?? auth.sub ?? "unknown";
+  if (!(await checkRateLimit(identifier))) {
+    return c.json({ error: "Too many requests", details: "Rate limit exceeded" }, 429);
+  }
+  await next();
+});
 app.post("/sync", handleSync);
 
 // So 404s are returned by our app (with CORS), not by the platform

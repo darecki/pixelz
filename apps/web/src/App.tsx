@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import Leaderboard from "./pages/Leaderboard";
 import Play from "./pages/Play";
 import { mergeAnonymous, STORAGE_KEYS } from "./lib/api";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function Layout({ session, children }: { session: Session | null; children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -76,12 +77,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <Layout session={session}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/play" element={<Play />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/play" element={<Play />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+          </Routes>
+        </ErrorBoundary>
       </Layout>
     </BrowserRouter>
   );

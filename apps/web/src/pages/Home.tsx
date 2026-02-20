@@ -80,7 +80,7 @@ export default function Home() {
 
   return (
     <div>
-      <h2>Home</h2>
+      <h1>Pixelz</h1>
 
       <section style={{ marginTop: "1.5rem", marginBottom: "2rem" }} aria-label="Select game">
         <h3 style={{ marginBottom: "1rem", fontSize: "1.1rem", fontWeight: 600 }}>Select game</h3>
