@@ -29,7 +29,9 @@ export default function SessionRoom() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const beginTriggeredRef = useRef(false);
+  const inviteCopyTimeoutRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     const next = await fetchSession(sessionId);
@@ -85,6 +87,28 @@ export default function SessionRoom() {
       beginTriggeredRef.current = false;
     }
   }, [data?.session.status]);
+
+  useEffect(() => {
+    return () => {
+      if (inviteCopyTimeoutRef.current != null) {
+        window.clearTimeout(inviteCopyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  async function handleCopyInviteUrl(inviteUrl: string) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopiedInvite(true);
+      if (inviteCopyTimeoutRef.current != null) {
+        window.clearTimeout(inviteCopyTimeoutRef.current);
+      }
+      inviteCopyTimeoutRef.current = window.setTimeout(() => setCopiedInvite(false), 1800);
+    } catch {
+      // no-op, users can still copy manually
+    }
+  }
 
   async function handleReady() {
     if (!data) return;
@@ -224,7 +248,40 @@ export default function SessionRoom() {
               </li>
             ))}
           </ul>
-          <div className="invite-link mb-md">{inviteUrl}</div>
+          <button
+            type="button"
+            onClick={() => {
+              handleCopyInviteUrl(inviteUrl).catch(() => {});
+            }}
+            className="invite-link mb-md"
+            title={copiedInvite ? "Copied!" : "Click to copy invite link"}
+          >
+            <span className="invite-link-text">{inviteUrl}</span>
+            <span className="invite-link-action" aria-hidden="true">
+              {copiedInvite ? (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                  <path
+                    d="M5 13L9.5 17.5L19 8"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                  <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="2" />
+                  <path
+                    d="M15 9V6C15 4.9 14.1 4 13 4H6C4.9 4 4 4.9 4 6V13C4 14.1 4.9 15 6 15H9"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </span>
+            {copiedInvite && <span className="invite-link-status">Copied!</span>}
+          </button>
           {data.session.status === "ready" && (
             <p className="text-secondary mb-sm">Game starts in: <strong>{Math.max(0, Math.ceil(remainingMs / 1000))}s</strong></p>
           )}

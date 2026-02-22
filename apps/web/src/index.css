@@ -965,14 +965,58 @@ label {
 }
 
 .invite-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
   font-size: 0.85rem;
   color: var(--text-muted);
-  word-break: break-all;
   font-family: 'SF Mono', 'Fira Code', monospace;
   padding: 0.5rem 0.75rem;
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.invite-link:hover {
+  border-color: var(--border-hover);
+  color: var(--text-secondary);
+}
+
+.invite-link:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.invite-link-text {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.invite-link-action {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 1.6rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
+
+.invite-link-status {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
 }
 
 /* ─── Animations ─────────────────────────────────────────── */
