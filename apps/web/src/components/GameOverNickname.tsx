@@ -30,16 +30,16 @@ export default function GameOverNickname({ disabled, hideIfNoAuth }: Props) {
     }
   }, [hideIfNoAuth]);
 
-  if (hideIfNoAuth && !isAuthed) {
-    return null;
-  }
-
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     const stored = localStorage.getItem(STORAGE_KEYS.nickname) ?? "";
     const anonId = localStorage.getItem(STORAGE_KEYS.anonymousId) ?? "";
     setDisplayNickname(stored.trim() || anonId);
   }, []);
+
+  if (hideIfNoAuth && !isAuthed) {
+    return null;
+  }
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();

@@ -132,7 +132,7 @@ export default function Leaderboard() {
       const next = new URLSearchParams(prev);
       next.set("game", nextGame);
       next.set("level", getDefaultLevel(nextGame));
-      if (next.has("justFinished")) next.set("justFinished", "1");
+      next.delete("justFinished");
       return next;
     });
   }
@@ -141,6 +141,7 @@ export default function Leaderboard() {
     setSearchParams((prev) => {
       const p = new URLSearchParams(prev);
       p.set("level", next);
+      p.delete("justFinished");
       return p;
     });
   }
