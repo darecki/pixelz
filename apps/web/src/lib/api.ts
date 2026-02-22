@@ -5,6 +5,7 @@ export const NICKNAME_TAKEN_REASON = "nickname_taken";
 import type { SyncEvent } from "@pixelz/shared";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const SESSION_REQUEST_TIMEOUT_MS = 15_000;
 
 export const STORAGE_KEYS = {
   anonymousId: "pixelz_anonymous_id",
@@ -145,13 +146,31 @@ async function getAuthHeadersForSessionRequest(requireJwt = false): Promise<Head
   return { "X-Anonymous-Id": anonymousId };
 }
 
-export async function createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse> {
-  const headers = await getAuthHeadersForSessionRequest(true);
-  const res = await fetch(`${API_URL}/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(payload),
-  });
+export async function createSession(
+  payload: CreateSessionRequest,
+  accessToken?: string | null
+): Promise<CreateSessionResponse> {
+  const headers = accessToken
+    ? ({ Authorization: `Bearer ${accessToken}` } as HeadersInit)
+    : await getAuthHeadersForSessionRequest(true);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SESSION_REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Create invite timed out. Check API auth/database connectivity and try again.");
+    }
+    throw wrapFetchError(err, "Create invite failed.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? "Failed to create session");

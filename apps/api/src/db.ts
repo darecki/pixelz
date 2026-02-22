@@ -5,8 +5,12 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set");
 }
 
+const DEFAULT_POOL_MAX = process.env.VERCEL === "1" ? 3 : 10;
+const parsedPoolMax = Number(process.env.DB_POOL_MAX);
+const poolMax = Number.isFinite(parsedPoolMax) && parsedPoolMax > 0 ? parsedPoolMax : DEFAULT_POOL_MAX;
+
 export const sql = postgres(connectionString, {
-  max: 1,
+  max: poolMax,
   idle_timeout: 20,
   connect_timeout: 10,
   ssl: connectionString.includes("supabase") ? "require" : false,

@@ -79,12 +79,17 @@ export default function Configure() {
     setInviteError(null);
     setInviteCreating(true);
     try {
+      const sessionResult = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Auth session lookup timed out. Please refresh and try again.")), 8000);
+        }),
+      ]);
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = sessionResult;
       if (!session?.access_token) {
         setInviteError("Sign in to create a 1:1 invite.");
-        setInviteCreating(false);
         return;
       }
 
@@ -94,24 +99,26 @@ export default function Configure() {
               game: "reflex",
               mode: "predefined",
               levelId: inviteReflexLevel,
-            })
+            }, session.access_token)
           : await createSession({
               game: "pixelz",
               mode: "generated",
               settings: pixelzParams,
-            });
+            }, session.access_token);
 
       const inviteUrl =
         typeof window !== "undefined"
           ? `${window.location.origin}/join/${encodeURIComponent(created.inviteCode)}`
           : `/join/${encodeURIComponent(created.inviteCode)}`;
-      try {
-        await navigator.clipboard.writeText(inviteUrl);
-      } catch {
-      }
+      // Do not block navigation on clipboard APIs; some environments can stall here.
+      void Promise.race([
+        navigator.clipboard.writeText(inviteUrl),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+      ]).catch(() => undefined);
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : "Failed to create invite");
+    } finally {
       setInviteCreating(false);
     }
   }

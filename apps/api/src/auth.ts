@@ -9,7 +9,17 @@ if (!SUPABASE_URL) {
 }
 
 const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", SUPABASE_URL.replace(/\/$/, ""));
-const SupabaseJWKS = jose.createRemoteJWKSet(jwksUrl);
+const SupabaseJWKS = jose.createRemoteJWKSet(jwksUrl, {
+  timeoutDuration: 3000,
+  cooldownDuration: 30_000,
+});
+const FLEX_AUTH_TIMEOUT_MS = 5000;
+
+function timeoutReject(ms: number, message: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(message)), ms);
+  });
+}
 
 /** Returns auth payload if token is valid, otherwise null. Does not send 401. */
 export async function verifyTokenOptional(token: string | null): Promise<AuthPayload | null> {
@@ -86,34 +96,45 @@ export const authMiddleware = createMiddleware<{
 export const flexAuthMiddleware = createMiddleware<{
   Variables: { resolvedAuth: ResolvedAuth };
 }>(async (c, next) => {
-  const authHeader = c.req.header("Authorization");
-  const parsed = await verifyTokenOptional(authHeader ?? null);
-  if (parsed) {
-    const appUserId = await getOrCreateAppUserId(
-      parsed.sub,
-      parsed.email ?? null,
-      parsed.nickname ?? null
-    );
-    c.set("resolvedAuth", {
-      appUserId,
-      isAnonymous: false,
-      nickname: parsed.nickname ?? null,
-    });
-    await next();
-    return;
-  }
-
-  const anonId = c.req.header("X-Anonymous-Id");
-  if (anonId) {
-    const appUserId = await getAnonymousAppUserId(anonId);
-    if (appUserId) {
-      c.set("resolvedAuth", { appUserId, isAnonymous: true, nickname: null });
+  try {
+    const authHeader = c.req.header("Authorization");
+    const parsed = await Promise.race([
+      verifyTokenOptional(authHeader ?? null),
+      timeoutReject(FLEX_AUTH_TIMEOUT_MS, "Authentication lookup timed out"),
+    ]);
+    if (parsed) {
+      const appUserId = await getOrCreateAppUserId(
+        parsed.sub,
+        parsed.email ?? null,
+        parsed.nickname ?? null
+      );
+      c.set("resolvedAuth", {
+        appUserId,
+        isAnonymous: false,
+        nickname: parsed.nickname ?? null,
+      });
       await next();
       return;
     }
-  }
 
-  return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
+    const anonId = c.req.header("X-Anonymous-Id");
+    if (anonId) {
+      const appUserId = await getAnonymousAppUserId(anonId);
+      if (appUserId) {
+        c.set("resolvedAuth", { appUserId, isAnonymous: true, nickname: null });
+        await next();
+        return;
+      }
+    }
+
+    return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Authentication lookup timed out") {
+      return c.json({ error: msg }, 504);
+    }
+    throw err;
+  }
 });
 
 /** For POST /sync: accept either Bearer JWT or X-Anonymous-Id. */

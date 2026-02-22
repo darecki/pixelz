@@ -55,38 +55,35 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
   const lowerIsBetter = levelId.startsWith("reflex_") || isPixelzBoardId(levelId);
 
   try {
-    const raw = await Promise.race([
-      lowerIsBetter
-        ? sql`
-          select
-            s.score,
-            s.moves,
-            s.time_ms,
-            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-            u.id as user_id,
-            coalesce(s.nickname, u.nickname) as nickname
-          from public.scores s
-          join public.app_users u on u.id = s.user_id
-          where s.level_id = ${levelId}
-          order by s.score asc, s.time_ms asc
-          limit ${GAME.LEADERBOARD_TOP_N}
-        `
-        : sql`
-          select
-            s.score,
-            s.moves,
-            s.time_ms,
-            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-            u.id as user_id,
-            coalesce(s.nickname, u.nickname) as nickname
-          from public.scores s
-          join public.app_users u on u.id = s.user_id
-          where s.level_id = ${levelId}
-          order by s.score desc, s.time_ms asc
-          limit ${GAME.LEADERBOARD_TOP_N}
-        `,
-      timeout(LEADERBOARD_HANDLER_TIMEOUT_MS),
-    ]);
+    const raw = await (lowerIsBetter
+      ? sql`
+        select
+          s.score,
+          s.moves,
+          s.time_ms,
+          to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
+          u.id as user_id,
+          coalesce(s.nickname, u.nickname) as nickname
+        from public.scores s
+        join public.app_users u on u.id = s.user_id
+        where s.level_id = ${levelId}
+        order by s.score asc, s.time_ms asc
+        limit ${GAME.LEADERBOARD_TOP_N}
+      `
+      : sql`
+        select
+          s.score,
+          s.moves,
+          s.time_ms,
+          to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
+          u.id as user_id,
+          coalesce(s.nickname, u.nickname) as nickname
+        from public.scores s
+        join public.app_users u on u.id = s.user_id
+        where s.level_id = ${levelId}
+        order by s.score desc, s.time_ms asc
+        limit ${GAME.LEADERBOARD_TOP_N}
+      `);
     const rows: LeaderboardRow[] = raw as unknown as LeaderboardRow[];
 
     const entries = rows.map((row: LeaderboardRow, index: number) => ({
@@ -107,11 +104,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
     return c.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (message === "Leaderboard timeout") {
-      console.error("[leaderboard] Timeout (DB query). Returning empty.");
-    } else {
-      console.error("[leaderboard]", message);
-    }
+    console.error("[leaderboard]", message);
     return c.json({ levelId, entries: [], currentUserId: currentUserId ?? undefined });
   }
 }
