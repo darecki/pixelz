@@ -10,7 +10,7 @@ create table if not exists public.game_sessions (
   status text not null default 'waiting'
     check (status in ('waiting', 'ready', 'playing', 'finished', 'cancelled', 'abandoned')),
   max_players int not null default 2 check (max_players >= 2),
-  winner_user_id uuid references public.app_users(id),
+  winner_user_id uuid references public.app_users(id) on delete set null,
   created_at timestamptz not null default now(),
   starts_at timestamptz,
   finished_at timestamptz
@@ -47,3 +47,10 @@ create index if not exists idx_game_session_players_user
 
 alter table public.game_sessions enable row level security;
 alter table public.game_session_players enable row level security;
+
+-- Row Level Security (RLS) is intentionally enabled on these tables without
+-- defining per-role policies in this migration. All access to game_sessions
+-- and game_session_players is expected to go through the API using a
+-- privileged service role that bypasses RLS.
+-- If direct client access via Supabase client libraries is introduced in
+-- the future, add explicit RLS policies here to govern that access.

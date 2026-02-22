@@ -44,9 +44,11 @@ function getResolvedAuth(c: Context): ResolvedAuth {
 
 function generateInviteCode(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = new Uint8Array(SESSION.INVITE_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
   let out = "";
   for (let i = 0; i < SESSION.INVITE_CODE_LENGTH; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
+    out += chars[bytes[i] % chars.length];
   }
   return out;
 }
@@ -147,13 +149,20 @@ export async function handleCreateSession(c: Context): Promise<Response> {
   const payload = parsed.data;
   const game = payload.game;
   const seed = crypto.randomUUID();
-  let levelId: string | null = "levelId" in payload ? payload.levelId ?? null : null;
-  const settings =
-    game === "reflex"
-      ? { rounds: REFLEX_LEVELS[payload.levelId as keyof typeof REFLEX_LEVELS] ?? 10 }
-      : payload.mode === "generated"
-        ? payload.settings
-        : {};
+  let levelId: string | null =
+    "levelId" in payload && typeof payload.levelId === "string" ? payload.levelId : null;
+  let settings: Record<string, unknown>;
+  if (game === "reflex") {
+    const rounds =
+      levelId && levelId in REFLEX_LEVELS
+        ? REFLEX_LEVELS[levelId as keyof typeof REFLEX_LEVELS]
+        : 10;
+    settings = { rounds };
+  } else if (payload.mode === "generated") {
+    settings = payload.settings;
+  } else {
+    settings = {};
+  }
 
   for (let i = 0; i < 5; i++) {
     const inviteCode = generateInviteCode();

@@ -12,6 +12,7 @@ import { PIXELZ_COLORS } from "./constants";
 
 const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 type SessionGameProps = {
+  seed: number;
   onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
   onProgress?: (progress: { moves: number; timeMs: number }) => void;
 };

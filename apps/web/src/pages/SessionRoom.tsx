@@ -114,9 +114,13 @@ export default function SessionRoom() {
 
   async function handleComplete(result: { moves: number; timeMs: number; moveSequence?: number[] }) {
     if (!data) return;
-    await finishSession(data.session.id, result);
-    await refresh();
-    await broadcast("player_finished", { sessionId: data.session.id });
+    try {
+      await finishSession(data.session.id, result);
+      await refresh();
+      await broadcast("player_finished", { sessionId: data.session.id });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to complete session");
+    }
   }
 
   async function handlePlayNextGame() {
