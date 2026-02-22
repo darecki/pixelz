@@ -8,6 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 export const STORAGE_KEYS = {
   anonymousId: "pixelz_anonymous_id",
   nickname: "pixelz_nickname",
+  dontRemindSignin: "pixelz_dont_remind_signin",
 } as const;
 
 export type BoardParams = {

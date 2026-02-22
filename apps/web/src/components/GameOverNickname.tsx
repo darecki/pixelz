@@ -3,6 +3,7 @@ import { appendEvent } from "../lib/eventLog";
 import { getPendingEvents, removeFirstEvents } from "../lib/eventLog";
 import { performSync } from "../lib/sync";
 import { STORAGE_KEYS, NICKNAME_TAKEN_REASON } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 const NICKNAME_MIN = 1;
 const NICKNAME_MAX = 32;
@@ -10,14 +11,28 @@ const NICKNAME_MAX = 32;
 type Props = {
   disabled?: boolean;
   buttonStyle?: React.CSSProperties;
+  hideIfNoAuth?: boolean;
 };
 
-export default function GameOverNickname({ disabled, buttonStyle }: Props) {
+export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }: Props) {
   const [displayNickname, setDisplayNickname] = useState("");
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    if (hideIfNoAuth) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setIsAuthed(!!session?.access_token);
+      });
+    }
+  }, [hideIfNoAuth]);
+
+  if (hideIfNoAuth && !isAuthed) {
+    return null;
+  }
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;

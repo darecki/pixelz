@@ -84,8 +84,9 @@ export async function handleSync(c: Context): Promise<Response> {
   const { events } = parsed.data;
   const rejectedIndices: number[] = [];
   const rejectedReasons: Record<string, string> = {};
+  const isAnonymousRequest = "anonymousAppUserId" in auth;
   const appUserId =
-    "anonymousAppUserId" in auth
+    isAnonymousRequest
       ? auth.anonymousAppUserId
       : await getOrCreateAppUserId(
           auth.sub,
@@ -95,7 +96,7 @@ export async function handleSync(c: Context): Promise<Response> {
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i] as SyncEvent;
-    const result = await processEvent(event, appUserId);
+    const result = await processEvent(event, appUserId, isAnonymousRequest);
     if (result !== true) {
       rejectedIndices.push(i);
       if (result.reason) rejectedReasons[String(i)] = result.reason;
@@ -112,12 +113,20 @@ export async function handleSync(c: Context): Promise<Response> {
 }
 
 const NICKNAME_TAKEN_REASON = "nickname_taken";
+const ANONYMOUS_SCORE_REJECTED_REASON = "anonymous_score_rejected";
 
 type ProcessResult = true | { reason: string };
 
-async function processEvent(event: SyncEvent, appUserId: string): Promise<ProcessResult> {
+async function processEvent(
+  event: SyncEvent,
+  appUserId: string,
+  isAnonymousRequest: boolean
+): Promise<ProcessResult> {
   switch (event.type) {
     case "LEVEL_COMPLETED": {
+      if (isAnonymousRequest) {
+        return { reason: ANONYMOUS_SCORE_REJECTED_REASON };
+      }
       const { levelId, score, moves, timeMs, moveSequence } = event.payload;
       if (!validateScore(score, moves, timeMs, levelId, "LEVEL_COMPLETED")) return false as ProcessResult;
       if (moveSequence !== undefined) {
@@ -148,6 +157,9 @@ async function processEvent(event: SyncEvent, appUserId: string): Promise<Proces
       return true;
     }
     case "RANDOM_LEVEL_PLAYED": {
+      if (isAnonymousRequest) {
+        return { reason: ANONYMOUS_SCORE_REJECTED_REASON };
+      }
       const { seed, score, moves, timeMs } = event.payload;
       if (!validateScore(score, moves, timeMs, "random", "RANDOM_LEVEL_PLAYED")) return false as ProcessResult;
       const levelIdRandom = "random";
