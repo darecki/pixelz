@@ -11,6 +11,10 @@ import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
 
 const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+type SessionGameProps = {
+  onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
+  onProgress?: (progress: { moves: number; timeMs: number }) => void;
+};
 
 function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
   if (leaderboardSize < 100) return rank <= 10;
@@ -53,7 +57,7 @@ function isFilled(grid: number[][]): boolean {
   return grid.flat().every((v) => v === c);
 }
 
-export default function PixelzGame({ levelId }: { levelId: string }) {
+export default function PixelzGame({ levelId, sessionProps }: { levelId: string; sessionProps?: SessionGameProps }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,16 +112,30 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
       if (startTime === null) setStartTime(start);
       const nextGrid = applyFloodFill(grid, currentColor, colorIndex);
       setGrid(nextGrid);
-      setMoves((m) => m + 1);
+      const nextMoves = moves + 1;
+      setMoves(nextMoves);
       setMoveSequence((seq) => [...seq, colorIndex]);
+      const elapsedNow = Math.floor(Date.now() - start);
+      sessionProps?.onProgress?.({ moves: nextMoves, timeMs: elapsedNow });
       if (isFilled(nextGrid)) {
         if (scoreSubmittedRef.current) return;
         scoreSubmittedRef.current = true;
         const elapsed = Math.floor(Date.now() - start);
         setTimeMs(elapsed);
         const finalMoves = moves + 1;
-        const score = computePixelzScore(finalMoves, elapsed);
         const seq = [...moveSequence, colorIndex];
+        const score = computePixelzScore(finalMoves, elapsed);
+
+        if (sessionProps?.onComplete) {
+          setSaving(true);
+          Promise.resolve(sessionProps.onComplete({ moves: finalMoves, timeMs: elapsed, moveSequence: seq }))
+            .catch(() => {})
+            .finally(() => {
+              setSaving(false);
+              setWon(true);
+            });
+          return;
+        }
 
         const checkAuthAndPrompt = async () => {
           const { data: { session } } = await supabase.auth.getSession();
@@ -176,7 +194,7 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         checkAuthAndPrompt();
       }
     },
-    [grid, won, startTime, moves, moveSequence, levelId]
+    [grid, won, startTime, moves, moveSequence, levelId, sessionProps]
   );
 
   useEffect(() => {

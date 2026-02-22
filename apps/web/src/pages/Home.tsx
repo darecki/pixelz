@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REFLEX_LEVELS, PIXELZ_LEVEL_IDS, PIXELZ_LEVELS } from "@pixelz/shared";
 import { GAMES } from "../games/registry";
-import { createBoard, fetchMyPlayedBoards } from "../lib/api";
+import { createBoard, createSession, fetchMyPlayedBoards } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import ReflexPreviewFrame from "../components/ReflexPreviewFrame";
 import PixelzPreviewFrame from "../components/PixelzPreviewFrame";
@@ -29,6 +29,8 @@ export default function Home() {
   const [myBoardsLoading, setMyBoardsLoading] = useState(false);
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [inviteCreating, setInviteCreating] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +79,48 @@ export default function Home() {
   }
 
   const selectedGame = GAMES.find((g) => g.id === selectedGameId) ?? GAMES[0];
+
+  async function handleCreateInvite() {
+    setInviteError(null);
+    setInviteCreating(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setInviteError("Sign in to create a 1:1 invite.");
+        setInviteCreating(false);
+        return;
+      }
+
+      const created =
+        selectedGame?.id === "reflex"
+          ? await createSession({
+              game: "reflex",
+              mode: "predefined",
+              levelId: selectedGame.levelIds[0] ?? "reflex_level_0",
+            })
+          : await createSession({
+              game: "pixelz",
+              mode: "generated",
+              settings: pixelzParams,
+            });
+
+      const inviteUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/join/${encodeURIComponent(created.inviteCode)}`
+          : `/join/${encodeURIComponent(created.inviteCode)}`;
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+      } catch {
+        // ignore clipboard errors
+      }
+      navigate(`/session/${encodeURIComponent(created.sessionId)}`);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Failed to create invite");
+      setInviteCreating(false);
+    }
+  }
 
   return (
     <div>
@@ -141,6 +185,17 @@ export default function Home() {
         <h3 style={{ marginBottom: "0.75rem" }}>{selectedGame?.name}</h3>
         {selectedGame && (
           <>
+            <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleCreateInvite}
+                disabled={inviteCreating}
+                style={{ padding: "0.5rem 0.9rem", background: "#e8f5e9", borderRadius: 4 }}
+              >
+                {inviteCreating ? "Creating invite…" : "Invite for 1:1"}
+              </button>
+              {inviteError && <span style={{ color: "#c00", fontSize: "0.9rem" }}>{inviteError}</span>}
+            </div>
             {selectedGame.levelType === "board" && selectedGame.id === "pixelz" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: 420 }}>
                 <div>

@@ -1,4 +1,5 @@
 import { syncRequestSchema, syncResponseSchema, leaderboardResponseSchema } from "@pixelz/shared";
+import { supabase } from "./supabase";
 
 export const NICKNAME_TAKEN_REASON = "nickname_taken";
 import type { SyncEvent } from "@pixelz/shared";
@@ -18,6 +19,55 @@ export type BoardParams = {
   numColors: number;
   seed: string;
 };
+
+export type SessionGame = "pixelz" | "reflex";
+export type SessionStatus = "waiting" | "ready" | "playing" | "finished" | "cancelled" | "abandoned";
+export type SessionPlayerStatus = "joined" | "ready" | "playing" | "finished" | "abandoned";
+export type SessionPlayerRole = "host" | "guest";
+
+export type SessionInvitePreview = {
+  sessionId: string;
+  game: SessionGame;
+  levelId: string | null;
+  settings: Record<string, unknown>;
+  status: SessionStatus;
+  maxPlayers: number;
+  hostNickname: string | null;
+};
+
+export type SessionResponse = {
+  session: {
+    id: string;
+    game: SessionGame;
+    inviteCode: string;
+    levelId: string | null;
+    seed: string;
+    settings: Record<string, unknown>;
+    status: SessionStatus;
+    maxPlayers: number;
+    startsAt: string | null;
+    finishedAt: string | null;
+    winnerId: string | null;
+  };
+  players: Array<{
+    userId: string;
+    role: SessionPlayerRole;
+    status: SessionPlayerStatus;
+    score: number | null;
+    moves: number | null;
+    timeMs: number | null;
+    moveSequence: number[] | null;
+    finishedAt: string | null;
+    nickname: string | null;
+  }>;
+};
+
+export type CreateSessionRequest =
+  | { game: "pixelz"; mode: "predefined"; levelId: string }
+  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number } }
+  | { game: "reflex"; mode: "predefined"; levelId: string };
+
+export type CreateSessionResponse = { sessionId: string; inviteCode: string };
 
 export async function createBoard(params: {
   width?: number;
@@ -73,6 +123,112 @@ export async function registerAnonymous(): Promise<RegisterAnonymousResponse> {
   const data = await res.json();
   if (typeof data?.anonymousId !== "string") throw new Error("Invalid response from server");
   return { anonymousId: data.anonymousId };
+}
+
+async function getAuthHeadersForSessionRequest(requireJwt = false): Promise<HeadersInit> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+  if (requireJwt) {
+    throw new Error("Sign in required");
+  }
+  let anonymousId = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEYS.anonymousId) : null;
+  if (!anonymousId) {
+    const created = await registerAnonymous();
+    anonymousId = created.anonymousId;
+    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEYS.anonymousId, anonymousId);
+  }
+  return { "X-Anonymous-Id": anonymousId };
+}
+
+export async function createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse> {
+  const headers = await getAuthHeadersForSessionRequest(true);
+  const res = await fetch(`${API_URL}/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to create session");
+  }
+  return res.json();
+}
+
+export async function fetchSessionInvite(inviteCode: string): Promise<SessionInvitePreview> {
+  const res = await fetch(`${API_URL}/sessions/invite/${encodeURIComponent(inviteCode)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to load invite");
+  }
+  return res.json();
+}
+
+export async function joinSession(sessionId: string): Promise<void> {
+  const headers = await getAuthHeadersForSessionRequest(false);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/join`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to join session");
+  }
+}
+
+async function postSessionAction(sessionId: string, action: "ready" | "begin" | "leave"): Promise<void> {
+  const headers = await getAuthHeadersForSessionRequest(false);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/${action}`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? `Failed to ${action} session`);
+  }
+}
+
+export async function markSessionReady(sessionId: string): Promise<void> {
+  return postSessionAction(sessionId, "ready");
+}
+
+export async function beginSession(sessionId: string): Promise<void> {
+  return postSessionAction(sessionId, "begin");
+}
+
+export async function leaveSession(sessionId: string): Promise<void> {
+  return postSessionAction(sessionId, "leave");
+}
+
+export async function finishSession(
+  sessionId: string,
+  payload: { moves: number; timeMs: number; moveSequence?: number[] }
+): Promise<void> {
+  const headers = await getAuthHeadersForSessionRequest(false);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/finish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to finish session");
+  }
+}
+
+export async function fetchSession(sessionId: string): Promise<SessionResponse> {
+  const headers = await getAuthHeadersForSessionRequest(false);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}`, {
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to load session");
+  }
+  return res.json();
 }
 
 export async function syncEvents(accessToken: string, events: SyncEvent[]) {

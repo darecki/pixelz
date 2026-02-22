@@ -8,7 +8,7 @@ export type GameDef = {
   name: string;
   levelType: GameLevelType;
   levelIds: readonly string[];
-  component: React.LazyExoticComponent<React.ComponentType<{ levelId: string }>>;
+  component: React.LazyExoticComponent<React.ComponentType<{ levelId: string; sessionProps?: any }>>;
 };
 
 export const GAMES: GameDef[] = [

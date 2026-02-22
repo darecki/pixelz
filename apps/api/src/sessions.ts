@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import {
   SESSION,
+  PIXELZ_BOARD_ID_PREFIX,
   REFLEX_LEVELS,
   createSessionSchema,
   finishSessionSchema,
@@ -145,7 +146,7 @@ export async function handleCreateSession(c: Context): Promise<Response> {
   const payload = parsed.data;
   const game = payload.game;
   const seed = crypto.randomUUID();
-  const levelId = "levelId" in payload ? payload.levelId ?? null : null;
+  let levelId: string | null = "levelId" in payload ? payload.levelId ?? null : null;
   const settings =
     game === "reflex"
       ? { rounds: REFLEX_LEVELS[payload.levelId as keyof typeof REFLEX_LEVELS] ?? 10 }
@@ -157,6 +158,14 @@ export async function handleCreateSession(c: Context): Promise<Response> {
     const inviteCode = generateInviteCode();
     try {
       const created = await sql.begin(async (tx: any) => {
+        if (game === "pixelz" && payload.mode === "generated") {
+          const boardId = PIXELZ_BOARD_ID_PREFIX + crypto.randomUUID();
+          await tx`
+            insert into public.boards (id, width, height, num_colors, seed)
+            values (${boardId}, ${payload.settings.width}, ${payload.settings.height}, ${payload.settings.numColors}, ${seed})
+          `;
+          levelId = boardId;
+        }
         const inserted = await tx`
           insert into public.game_sessions (game, invite_code, level_id, seed, settings, status, max_players)
           values (${game}, ${inviteCode}, ${levelId}, ${seed}, ${settings}, 'waiting', 2)

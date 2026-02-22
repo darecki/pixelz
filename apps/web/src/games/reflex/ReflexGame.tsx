@@ -13,8 +13,14 @@ import {
   getRoundsForLevel,
 } from "./constants";
 import { useBeep } from "./useBeep";
+import { hashString, mulberry32 } from "@pixelz/shared";
 
 type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting";
+type SessionGameProps = {
+  seed: string;
+  onComplete: (result: { moves: number; timeMs: number }) => void | Promise<void>;
+  onProgress?: (progress: { moves: number; timeMs: number }) => void;
+};
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
 const KEYBOARD_KEYS = ["q", "w", "e", "p"] as const;
@@ -24,7 +30,7 @@ function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
   return rank <= Math.ceil(leaderboardSize * 0.1);
 }
 
-export default function ReflexGame({ levelId }: { levelId: string }) {
+export default function ReflexGame({ levelId, sessionProps }: { levelId: string; sessionProps?: SessionGameProps }) {
   const navigate = useNavigate();
   const totalRounds = getRoundsForLevel(levelId);
   const { shortBeep, longBeep } = useBeep();
@@ -42,11 +48,28 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ moves: number; timeMs: number } | null>(null);
 
-  const pickTargetColor = useCallback(() => REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)], []);
+  const deterministicSequenceRef = useRef<string[]>([]);
+  const pickTargetColor = useCallback(
+    (roundNumber: number) => {
+      if (sessionProps?.seed) {
+        if (deterministicSequenceRef.current.length === 0) {
+          const rng = mulberry32(hashString(`${sessionProps.seed}-reflex`));
+          deterministicSequenceRef.current = Array.from({ length: totalRounds }, () => {
+            const index = Math.floor(rng() * REFLEX_COLORS.length);
+            return REFLEX_COLORS[index];
+          });
+        }
+        return deterministicSequenceRef.current[Math.max(0, roundNumber - 1)] ?? REFLEX_COLORS[0];
+      }
+      return REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)];
+    },
+    [sessionProps?.seed, totalRounds]
+  );
 
   useEffect(() => {
     sessionStorage.removeItem("pixelz_pending_score");
     scoreSubmittedRef.current = false;
+    deterministicSequenceRef.current = [];
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
       if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
@@ -61,6 +84,12 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     setCountdownStep(0);
     setTargetColor(null);
   }
+
+  useEffect(() => {
+    if (sessionProps && phase === "idle") {
+      startGame();
+    }
+  }, [sessionProps, phase]);
 
   useEffect(() => {
     if (phase !== "reaction") return;
@@ -79,7 +108,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     if (phase !== "countdown") return;
     if (countdownStep >= COUNTDOWN_STEPS.length) {
       setPhase("reaction");
-      setTargetColor(pickTargetColor());
+      setTargetColor(pickTargetColor(round));
       reactionStartRef.current = performance.now();
       longBeep();
       return;
@@ -91,7 +120,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
     };
-  }, [phase, countdownStep, pickTargetColor, shortBeep, longBeep]);
+  }, [phase, countdownStep, pickTargetColor, shortBeep, longBeep, round]);
 
   function handleButtonClick(clickedColor: string) {
     if (phase !== "reaction" || !targetColor) return;
@@ -103,9 +132,18 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     const elapsed = Math.round(performance.now() - reactionStartRef.current);
     const newTotal = cumulativeTimeMs + elapsed;
     setCumulativeTimeMs(newTotal);
+    sessionProps?.onProgress?.({ moves: round, timeMs: newTotal });
     if (round >= totalRounds) {
       if (scoreSubmittedRef.current) return;
       scoreSubmittedRef.current = true;
+
+      if (sessionProps?.onComplete) {
+        setPhase("saving");
+        Promise.resolve(sessionProps.onComplete({ moves: totalRounds, timeMs: newTotal }))
+          .catch(() => {})
+          .finally(() => setPhase("finished"));
+        return;
+      }
       
       const checkAuthAndPrompt = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -226,7 +264,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
     touchAction: "manipulation",
   };
 
-  if (phase === "idle") {
+  if (phase === "idle" && !sessionProps) {
     return (
       <div style={containerStyle}>
         <h2 style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "0.5rem" }}>Reflex</h2>

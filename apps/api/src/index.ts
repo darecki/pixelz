@@ -26,6 +26,12 @@ type AppVariables = {
 
 const app = new Hono<{ Variables: AppVariables }>();
 
+function requestIdentifier(c: { req: { header: (name: string) => string | undefined } }): string {
+  const forwarded = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "";
+  const first = forwarded.split(",")[0]?.trim();
+  return first || "unknown";
+}
+
 app.onError((err, c) => {
   const message = err.message ?? String(err);
   console.error("[api]", message);
@@ -85,9 +91,21 @@ app.post("/sync", async (c, next) => {
 });
 app.post("/sync", handleSync);
 
-app.get("/sessions/invite/:inviteCode", handleGetSessionInvite);
+app.get("/sessions/invite/:inviteCode", async (c, next) => {
+  if (!(await checkRateLimit(`invite:${requestIdentifier(c)}`))) {
+    return c.json({ error: "Too many requests", details: "Rate limit exceeded" }, 429);
+  }
+  await next();
+}, handleGetSessionInvite);
 app.post("/sessions", flexAuthMiddleware, handleCreateSession);
-app.post("/sessions/:id/join", flexAuthMiddleware, handleJoinSession);
+app.post("/sessions/:id/join", flexAuthMiddleware, async (c, next) => {
+  const auth = c.get("resolvedAuth") as ResolvedAuth;
+  const identifier = auth?.appUserId ?? requestIdentifier(c);
+  if (!(await checkRateLimit(`join:${identifier}`))) {
+    return c.json({ error: "Too many requests", details: "Rate limit exceeded" }, 429);
+  }
+  await next();
+}, handleJoinSession);
 app.post("/sessions/:id/ready", flexAuthMiddleware, handleReadySession);
 app.post("/sessions/:id/begin", flexAuthMiddleware, handleBeginSession);
 app.post("/sessions/:id/finish", flexAuthMiddleware, handleFinishSession);

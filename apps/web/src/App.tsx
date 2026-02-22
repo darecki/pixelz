@@ -6,6 +6,8 @@ import Login from "./components/Login";
 import Home from "./pages/Home";
 import Leaderboard from "./pages/Leaderboard";
 import Play from "./pages/Play";
+import JoinSession from "./pages/JoinSession";
+import SessionRoom from "./pages/SessionRoom";
 import { mergeAnonymous, STORAGE_KEYS } from "./lib/api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -83,6 +85,8 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/play" element={<Play />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/join/:inviteCode" element={<JoinSession />} />
+            <Route path="/session/:sessionId" element={<SessionRoom />} />
           </Routes>
         </ErrorBoundary>
       </Layout>
