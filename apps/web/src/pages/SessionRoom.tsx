@@ -35,6 +35,9 @@ export default function SessionRoom() {
     const next = await fetchSession(sessionId);
     setData(next);
   }, [sessionId]);
+  const handleHint = useCallback(() => {
+    refresh().catch(() => {});
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +61,7 @@ export default function SessionRoom() {
   const { progressByUser, onlineSet, broadcast, broadcastProgress } = useGameSession(
     data?.session.id ?? null,
     data?.currentUserId ?? null,
-    () => {
-      refresh().catch(() => {});
-    }
+    handleHint
   );
 
   const tickNow = useNowTick(Boolean(data?.session.status === "ready" && data.session.startsAt));

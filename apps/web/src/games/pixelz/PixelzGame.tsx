@@ -69,15 +69,33 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [won, setWon] = useState(false);
   const [timeMs, setTimeMs] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [sessionFinishError, setSessionFinishError] = useState<string | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [promptRank, setPromptRank] = useState(0);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
+  const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; moveSequence?: number[] } | null>(null);
+
+  const submitSessionCompletion = useCallback(async () => {
+    if (!sessionProps?.onComplete || !pendingSessionResultRef.current) return;
+    setSaving(true);
+    setSessionFinishError(null);
+    try {
+      await sessionProps.onComplete(pendingSessionResultRef.current);
+      setWon(true);
+    } catch (err) {
+      setSessionFinishError(err instanceof Error ? err.message : "Failed to submit result. Please retry.");
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionProps]);
 
   useEffect(() => {
     sessionStorage.removeItem("pixelz_pending_score");
     let cancelled = false;
     scoreSubmittedRef.current = false;
+    pendingSessionResultRef.current = null;
+    setSessionFinishError(null);
     setLoading(true);
     setError(null);
     fetchBoard(levelId)
@@ -127,13 +145,8 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
         const score = computePixelzScore(finalMoves, elapsed);
 
         if (sessionProps?.onComplete) {
-          setSaving(true);
-          Promise.resolve(sessionProps.onComplete({ moves: finalMoves, timeMs: elapsed, moveSequence: seq }))
-            .catch(() => {})
-            .finally(() => {
-              setSaving(false);
-              setWon(true);
-            });
+          pendingSessionResultRef.current = { moves: finalMoves, timeMs: elapsed, moveSequence: seq };
+          submitSessionCompletion().catch(() => {});
           return;
         }
 
@@ -194,7 +207,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
         checkAuthAndPrompt();
       }
     },
-    [grid, won, startTime, moves, moveSequence, levelId, sessionProps]
+    [grid, won, startTime, moves, moveSequence, levelId, sessionProps, submitSessionCompletion]
   );
 
   useEffect(() => {
@@ -273,6 +286,32 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
           </button>
           <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }} disabled={saving}>
             Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionProps && scoreSubmittedRef.current && !won) {
+    return (
+      <div style={containerStyle}>
+        <h2 style={{ marginBottom: "0.5rem" }}>Submitting result…</h2>
+        <p style={{ fontSize: "clamp(1rem, 4vmin, 1.25rem)", marginBottom: "0.75rem" }}>
+          Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
+        </p>
+        {saving ? (
+          <p style={{ color: "#666", marginBottom: "0.75rem" }}>Saving…</p>
+        ) : (
+          <p style={{ color: "#c00", marginBottom: "0.75rem" }}>
+            {sessionFinishError ?? "Could not submit your result."}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button type="button" disabled={saving} onClick={() => submitSessionCompletion().catch(() => {})}>
+            Retry submit
+          </button>
+          <button type="button" disabled={saving} onClick={() => navigate("/")}>
+            Leave
           </button>
         </div>
       </div>

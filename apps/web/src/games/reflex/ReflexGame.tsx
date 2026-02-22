@@ -15,7 +15,7 @@ import {
 import { useBeep } from "./useBeep";
 import { hashString, mulberry32 } from "@pixelz/shared";
 
-type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting";
+type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting" | "submitError";
 type SessionGameProps = {
   seed: string;
   onComplete: (result: { moves: number; timeMs: number }) => void | Promise<void>;
@@ -41,12 +41,14 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const [countdownStep, setCountdownStep] = useState(0);
   const [targetColor, setTargetColor] = useState<string | null>(null);
   const [promptRank, setPromptRank] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ moves: number; timeMs: number } | null>(null);
+  const pendingSessionResultRef = useRef<{ moves: number; timeMs: number } | null>(null);
 
   const deterministicSequenceRef = useRef<string[]>([]);
   const pickTargetColor = useCallback(
@@ -78,12 +80,27 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
 
   function startGame() {
     scoreSubmittedRef.current = false;
+    pendingSessionResultRef.current = null;
+    setSubmitError(null);
     setPhase("countdown");
     setRound(1);
     setCumulativeTimeMs(0);
     setCountdownStep(0);
     setTargetColor(null);
   }
+
+  const submitSessionCompletion = useCallback(async () => {
+    if (!sessionProps?.onComplete || !pendingSessionResultRef.current) return;
+    setPhase("saving");
+    setSubmitError(null);
+    try {
+      await sessionProps.onComplete(pendingSessionResultRef.current);
+      setPhase("finished");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit result. Please retry.");
+      setPhase("submitError");
+    }
+  }, [sessionProps]);
 
   useEffect(() => {
     if (sessionProps && phase === "idle") {
@@ -138,10 +155,8 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
       scoreSubmittedRef.current = true;
 
       if (sessionProps?.onComplete) {
-        setPhase("saving");
-        Promise.resolve(sessionProps.onComplete({ moves: totalRounds, timeMs: newTotal }))
-          .catch(() => {})
-          .finally(() => setPhase("finished"));
+        pendingSessionResultRef.current = { moves: totalRounds, timeMs: newTotal };
+        submitSessionCompletion().catch(() => {});
         return;
       }
       
@@ -319,6 +334,26 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             setPhase("finished");
           }}
         />
+      </div>
+    );
+  }
+
+  if (phase === "submitError") {
+    return (
+      <div style={containerStyle}>
+        <h2 style={{ marginBottom: "0.5rem" }}>Submit failed</h2>
+        <p style={{ color: "#c00", marginBottom: "0.75rem" }}>{submitError ?? "Failed to submit result."}</p>
+        <p style={{ marginBottom: "1rem" }}>
+          Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
+        </p>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button type="button" onClick={() => submitSessionCompletion().catch(() => {})} style={ctaButtonStyle}>
+            Retry submit
+          </button>
+          <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle}>
+            Leave
+          </button>
+        </div>
       </div>
     );
   }
