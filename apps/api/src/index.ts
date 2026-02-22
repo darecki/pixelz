@@ -26,10 +26,17 @@ type AppVariables = {
 
 const app = new Hono<{ Variables: AppVariables }>();
 
+const PROCESS_REQUEST_FALLBACK_ID = `process-${Math.random().toString(36).slice(2)}`;
+
 function requestIdentifier(c: { req: { header: (name: string) => string | undefined } }): string {
-  const forwarded = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "";
+  const forwarded =
+    c.req.header("x-forwarded-for") ??
+    c.req.header("x-real-ip") ??
+    c.req.header("cf-connecting-ip") ??
+    c.req.header("x-vercel-forwarded-for") ??
+    "";
   const first = forwarded.split(",")[0]?.trim();
-  return first || "unknown";
+  return first || PROCESS_REQUEST_FALLBACK_ID;
 }
 
 app.onError((err, c) => {

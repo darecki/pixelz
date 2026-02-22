@@ -19,7 +19,9 @@ export function useGameSession(sessionId: string | null, selfUserId: string | nu
         if (!p.userId || typeof p.moves !== "number" || typeof p.timeMs !== "number") return;
         setProgressByUser((prev) => ({ ...prev, [p.userId!]: { moves: p.moves, timeMs: p.timeMs } }));
       })
-      .on("broadcast", { event: "*" }, () => onHint())
+      .on("broadcast", { event: "*" }, ({ event }) => {
+        if (event !== "progress_update") onHint();
+      })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ userId?: string }>();
         const ids = Object.values(state)

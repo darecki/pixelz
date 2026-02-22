@@ -83,7 +83,7 @@ export type PlayerResult = {
 
 export function computeSessionScore(game: "pixelz" | "reflex", moves: number, timeMs: number): number {
   if (game === "pixelz") return computePixelzScore(moves, timeMs);
-  return 0;
+  return timeMs;
 }
 
 export function comparePixelzResults(a: PlayerResult, b: PlayerResult): number {

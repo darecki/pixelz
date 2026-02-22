@@ -37,6 +37,7 @@ export default function JoinSession() {
     try {
       await joinSession(preview.sessionId);
       const ch = supabase.channel(`session:${preview.sessionId}`);
+      await ch.subscribe();
       await ch.send({ type: "broadcast", event: "player_joined", payload: { sessionId: preview.sessionId } });
       await supabase.removeChannel(ch);
       navigate(`/session/${encodeURIComponent(preview.sessionId)}`);
