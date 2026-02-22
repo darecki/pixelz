@@ -1,16 +1,27 @@
 import "./env.js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { authMiddleware, syncAuthMiddleware, type SyncAuth } from "./auth.js";
+import { authMiddleware, flexAuthMiddleware, syncAuthMiddleware, type ResolvedAuth, type SyncAuth } from "./auth.js";
 import { handleSync } from "./sync.js";
 import { handleLeaderboard } from "./leaderboard.js";
 import { handleCreateBoard, handleGetBoard } from "./boards.js";
 import { handleMyBoards, handleMergeAnonymous } from "./me.js";
 import { handleAnonRegister } from "./anon.js";
 import { checkRateLimit } from "./rateLimit.js";
+import {
+  handleBeginSession,
+  handleCreateSession,
+  handleFinishSession,
+  handleGetSession,
+  handleGetSessionInvite,
+  handleJoinSession,
+  handleLeaveSession,
+  handleReadySession,
+} from "./sessions.js";
 
 type AppVariables = {
   auth: SyncAuth;
+  resolvedAuth: ResolvedAuth;
 };
 
 const app = new Hono<{ Variables: AppVariables }>();
@@ -73,6 +84,15 @@ app.post("/sync", async (c, next) => {
   await next();
 });
 app.post("/sync", handleSync);
+
+app.get("/sessions/invite/:inviteCode", handleGetSessionInvite);
+app.post("/sessions", flexAuthMiddleware, handleCreateSession);
+app.post("/sessions/:id/join", flexAuthMiddleware, handleJoinSession);
+app.post("/sessions/:id/ready", flexAuthMiddleware, handleReadySession);
+app.post("/sessions/:id/begin", flexAuthMiddleware, handleBeginSession);
+app.post("/sessions/:id/finish", flexAuthMiddleware, handleFinishSession);
+app.post("/sessions/:id/leave", flexAuthMiddleware, handleLeaveSession);
+app.get("/sessions/:id", flexAuthMiddleware, handleGetSession);
 
 // So 404s are returned by our app (with CORS), not by the platform
 app.notFound((c) => c.json({ error: "Not found" }, 404));

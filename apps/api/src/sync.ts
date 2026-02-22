@@ -8,8 +8,9 @@ import {
   REFLEX_LEVELS,
 } from "@pixelz/shared";
 import { sql } from "./db.js";
-import type { AuthPayload, SyncAuth } from "./auth.js";
+import type { SyncAuth } from "./auth.js";
 import { ENV } from "./env.js";
+import { getOrCreateAppUserId } from "./users.js";
 
 /** Exported for unit tests. */
 export function validateScore(
@@ -41,36 +42,6 @@ export function isNicknameTakenBySignedInUser(
   rows: { supabase_auth_id: string | null }[]
 ): boolean {
   return rows.some((r) => r.supabase_auth_id != null);
-}
-
-function displayName(nickname: string | null, email: string | null): string | null {
-  const name = (nickname?.trim() || null) ?? email;
-  return name || null;
-}
-
-async function getOrCreateAppUserId(
-  supabaseAuthId: string,
-  email: string | null,
-  nicknameFromJwt: string | null
-): Promise<string> {
-  const name = displayName(nicknameFromJwt, email);
-  const existing = await sql`
-    select id, nickname from public.app_users where supabase_auth_id = ${supabaseAuthId}
-  `;
-  if (existing.length > 0) {
-    if (name != null && existing[0].nickname == null) {
-      await sql`
-        update public.app_users set nickname = ${name} where supabase_auth_id = ${supabaseAuthId}
-      `;
-    }
-    return existing[0].id;
-  }
-  const inserted = await sql`
-    insert into public.app_users (supabase_auth_id, nickname)
-    values (${supabaseAuthId}, ${name})
-    returning id
-  `;
-  return inserted[0].id;
 }
 
 export async function handleSync(c: Context): Promise<Response> {
