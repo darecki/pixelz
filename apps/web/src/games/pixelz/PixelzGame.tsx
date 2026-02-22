@@ -11,6 +11,11 @@ import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
 
 const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+type SessionGameProps = {
+  seed: string;
+  onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
+  onProgress?: (progress: { moves: number; timeMs: number }) => void;
+};
 
 function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
   if (leaderboardSize < 100) return rank <= 10;
@@ -53,7 +58,7 @@ function isFilled(grid: number[][]): boolean {
   return grid.flat().every((v) => v === c);
 }
 
-export default function PixelzGame({ levelId }: { levelId: string }) {
+export default function PixelzGame({ levelId, sessionProps }: { levelId: string; sessionProps?: SessionGameProps }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,15 +70,33 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
   const [won, setWon] = useState(false);
   const [timeMs, setTimeMs] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [sessionFinishError, setSessionFinishError] = useState<string | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [promptRank, setPromptRank] = useState(0);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
+  const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; moveSequence?: number[] } | null>(null);
+
+  const submitSessionCompletion = useCallback(async () => {
+    if (!sessionProps?.onComplete || !pendingSessionResultRef.current) return;
+    setSaving(true);
+    setSessionFinishError(null);
+    try {
+      await sessionProps.onComplete(pendingSessionResultRef.current);
+      setWon(true);
+    } catch (err) {
+      setSessionFinishError(err instanceof Error ? err.message : "Failed to submit result. Please retry.");
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionProps]);
 
   useEffect(() => {
     sessionStorage.removeItem("pixelz_pending_score");
     let cancelled = false;
     scoreSubmittedRef.current = false;
+    pendingSessionResultRef.current = null;
+    setSessionFinishError(null);
     setLoading(true);
     setError(null);
     fetchBoard(levelId)
@@ -108,16 +131,25 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
       if (startTime === null) setStartTime(start);
       const nextGrid = applyFloodFill(grid, currentColor, colorIndex);
       setGrid(nextGrid);
-      setMoves((m) => m + 1);
+      const nextMoves = moves + 1;
+      setMoves(nextMoves);
       setMoveSequence((seq) => [...seq, colorIndex]);
+      const elapsedNow = Math.floor(Date.now() - start);
+      sessionProps?.onProgress?.({ moves: nextMoves, timeMs: elapsedNow });
       if (isFilled(nextGrid)) {
         if (scoreSubmittedRef.current) return;
         scoreSubmittedRef.current = true;
         const elapsed = Math.floor(Date.now() - start);
         setTimeMs(elapsed);
         const finalMoves = moves + 1;
-        const score = computePixelzScore(finalMoves, elapsed);
         const seq = [...moveSequence, colorIndex];
+        const score = computePixelzScore(finalMoves, elapsed);
+
+        if (sessionProps?.onComplete) {
+          pendingSessionResultRef.current = { moves: finalMoves, timeMs: elapsed, moveSequence: seq };
+          submitSessionCompletion().catch(() => {});
+          return;
+        }
 
         const checkAuthAndPrompt = async () => {
           const { data: { session } } = await supabase.auth.getSession();
@@ -176,7 +208,7 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
         checkAuthAndPrompt();
       }
     },
-    [grid, won, startTime, moves, moveSequence, levelId]
+    [grid, won, startTime, moves, moveSequence, levelId, sessionProps, submitSessionCompletion]
   );
 
   useEffect(() => {
@@ -192,32 +224,18 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [won, loading, grid, numColors, handleColorClick]);
 
-  const containerStyle: React.CSSProperties = {
-    padding: "clamp(0.5rem, 2vmin, 1rem)",
-    maxWidth: 480,
-    margin: "0 auto",
-    minHeight: "100dvh",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    boxSizing: "border-box",
-    touchAction: "manipulation",
-  };
-
   if (loading) {
     return (
-      <div style={containerStyle}>
-        <p>Loading board…</p>
+      <div className="game-container">
+        <p className="loading-text">Loading board…</p>
       </div>
     );
   }
   if (error) {
     return (
-      <div style={containerStyle}>
-        <p style={{ color: "#c00", marginBottom: "1rem" }}>{error}</p>
-        <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }}>
-          Home
-        </button>
+      <div className="game-container">
+        <p className="text-error mb-md">{error}</p>
+        <button type="button" onClick={() => navigate("/")} className="btn">Home</button>
       </div>
     );
   }
@@ -227,20 +245,18 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
 
   if (won) {
     return (
-      <div style={containerStyle}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Done!</h2>
-        <p style={{ fontSize: "clamp(1rem, 4vmin, 1.25rem)", marginBottom: "0.5rem" }}>
+      <div className="game-container game-result">
+        <h2>Done! 🎉</h2>
+        <p className="game-result-stats">
           Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
         </p>
-        {saving && (
-          <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
-        )}
+        {saving && <p className="loading-text text-sm">Saving…</p>}
         {!showSignInPrompt && <GameOverNickname disabled={saving} hideIfNoAuth={true} />}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
+        <div className="game-result-actions">
           <button
             type="button"
             onClick={() => navigate(`/leaderboard?game=pixelz&level=${encodeURIComponent(levelId)}&justFinished=1`)}
-            style={{ padding: "0.5rem 1rem" }}
+            className="btn btn-primary"
             disabled={saving}
           >
             View leaderboard
@@ -248,12 +264,12 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            style={{ padding: "0.5rem 1rem" }}
+            className="btn"
             disabled={saving}
           >
-            Play this board again
+            Play again
           </button>
-          <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }} disabled={saving}>
+          <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={saving}>
             Home
           </button>
         </div>
@@ -261,53 +277,69 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
     );
   }
 
-  return (
-    <div style={containerStyle}>
-      <h2 style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "0.5rem" }}>Pixelz</h2>
-      <p style={{ marginBottom: "0.5rem", fontSize: "clamp(0.9rem, 2.5vmin, 1rem)" }}>
-        Moves: {moves}
-        {startTime != null && ` · ${((Date.now() - startTime) / 1000).toFixed(1)}s`}
-      </p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${grid[0].length}, ${cellSize}px)`,
-          gap: 1,
-          marginBottom: "1rem",
-        }}
-      >
-        {grid.flatMap((row, y) =>
-          row.map((colorIndex, x) => (
-            <div
-              key={`${y}-${x}`}
-              style={{
-                width: cellSize,
-                height: cellSize,
-                backgroundColor: PIXELZ_COLORS[colorIndex],
-                borderRadius: 2,
-              }}
-            />
-          ))
+  if (sessionProps && scoreSubmittedRef.current && !won) {
+    return (
+      <div className="game-container game-result">
+        <h2>Submitting result…</h2>
+        <p className="game-result-stats">
+          Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
+        </p>
+        {saving ? (
+          <p className="loading-text">Saving…</p>
+        ) : (
+          <p className="text-error">{sessionFinishError ?? "Could not submit your result."}</p>
         )}
+        <div className="game-result-actions">
+          <button type="button" disabled={saving} onClick={() => submitSessionCompletion().catch(() => {})} className="btn btn-primary">
+            Retry submit
+          </button>
+          <button type="button" disabled={saving} onClick={() => navigate("/")} className="btn btn-ghost">
+            Leave
+          </button>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: "clamp(6px, 2vmin, 12px)", justifyContent: "center", flexWrap: "wrap" }}>
+    );
+  }
+
+  return (
+    <div className="game-container">
+      <h2 className="game-title">Pixelz</h2>
+      <p className="game-stats">
+        Moves: <strong>{moves}</strong>
+        {startTime != null && <> · <strong>{((Date.now() - startTime) / 1000).toFixed(1)}s</strong></>}
+      </p>
+      <div className="game-board">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${grid[0].length}, ${cellSize}px)`,
+            gap: 1,
+          }}
+        >
+          {grid.flatMap((row, y) =>
+            row.map((colorIndex, x) => (
+              <div
+                key={`${y}-${x}`}
+                style={{
+                  width: cellSize,
+                  height: cellSize,
+                  backgroundColor: PIXELZ_COLORS[colorIndex],
+                  borderRadius: "var(--game-cell-radius)",
+                }}
+              />
+            ))
+          )}
+        </div>
+      </div>
+      <div className="color-btn-row">
         {PIXELZ_COLORS.slice(0, numColors).map((hex, i) => (
           <button
             key={i}
             type="button"
             onClick={() => handleColorClick(i)}
-            style={{
-              width: "clamp(44px, 12vmin, 56px)",
-              height: "clamp(44px, 12vmin, 56px)",
-              minWidth: 44,
-              minHeight: 44,
-              backgroundColor: hex,
-              border: "3px solid #333",
-              borderRadius: 10,
-              cursor: "pointer",
-              touchAction: "manipulation",
-            }}
-              aria-label={`Color ${i + 1}`}
+            className="color-btn"
+            style={{ backgroundColor: hex }}
+            aria-label={`Color ${i + 1}`}
           />
         ))}
       </div>

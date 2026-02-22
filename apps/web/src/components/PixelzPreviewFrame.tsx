@@ -1,5 +1,5 @@
 /**
- * Static mid-play frame matching PixelzGame UI at fixed small size (no scale/overflow).
+ * Static mid-play frame matching PixelzGame UI at fixed small size.
  */
 import { PIXELZ_COLORS } from "../games/pixelz/constants";
 
@@ -19,19 +19,9 @@ for (let y = 0; y < ROWS; y++) {
 
 export default function PixelzPreviewFrame() {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        width: 200,
-        padding: "4px 0",
-        background: "#fafafa",
-        borderRadius: 8,
-      }}
-    >
-      <p style={{ margin: 0, marginBottom: 2, fontSize: 12, fontWeight: 600 }}>Pixelz</p>
-      <p style={{ margin: 0, marginBottom: 4, fontSize: 10, color: "#333" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 200, padding: "6px 0" }}>
+      <p style={{ margin: 0, marginBottom: 2, fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>Pixelz</p>
+      <p style={{ margin: 0, marginBottom: 6, fontSize: 10, color: "var(--text-secondary)" }}>
         Moves: 4 · 5.2s
       </p>
       <div
@@ -40,6 +30,9 @@ export default function PixelzPreviewFrame() {
           gridTemplateColumns: `repeat(${COLS}, ${CELL}px)`,
           gap: 1,
           marginBottom: 6,
+          background: "var(--game-board-bg)",
+          padding: 3,
+          borderRadius: 4,
         }}
       >
         {previewGrid.flatMap((row, y) =>
@@ -50,7 +43,7 @@ export default function PixelzPreviewFrame() {
                 width: CELL,
                 height: CELL,
                 backgroundColor: PIXELZ_COLORS[colorIndex],
-                borderRadius: 1,
+                borderRadius: 2,
               }}
             />
           ))
@@ -61,10 +54,10 @@ export default function PixelzPreviewFrame() {
           <div
             key={i}
             style={{
-              width: 22,
-              height: 22,
+              width: 20,
+              height: 20,
               backgroundColor: hex,
-              border: "2px solid #333",
+              border: "2px solid var(--game-btn-border)",
               borderRadius: 6,
             }}
           />

@@ -1,19 +1,43 @@
 import "./env.js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { authMiddleware, syncAuthMiddleware, type SyncAuth } from "./auth.js";
+import { authMiddleware, flexAuthMiddleware, syncAuthMiddleware, type ResolvedAuth, type SyncAuth } from "./auth.js";
 import { handleSync } from "./sync.js";
 import { handleLeaderboard } from "./leaderboard.js";
 import { handleCreateBoard, handleGetBoard } from "./boards.js";
 import { handleMyBoards, handleMergeAnonymous } from "./me.js";
 import { handleAnonRegister } from "./anon.js";
 import { checkRateLimit } from "./rateLimit.js";
+import {
+  handleBeginSession,
+  handleCreateSession,
+  handleFinishSession,
+  handleGetSession,
+  handleGetSessionInvite,
+  handleJoinSession,
+  handleLeaveSession,
+  handleReadySession,
+} from "./sessions.js";
 
 type AppVariables = {
   auth: SyncAuth;
+  resolvedAuth: ResolvedAuth;
 };
 
 const app = new Hono<{ Variables: AppVariables }>();
+
+const PROCESS_REQUEST_FALLBACK_ID = `process-${Math.random().toString(36).slice(2)}`;
+
+function requestIdentifier(c: { req: { header: (name: string) => string | undefined } }): string {
+  const forwarded =
+    c.req.header("x-forwarded-for") ??
+    c.req.header("x-real-ip") ??
+    c.req.header("cf-connecting-ip") ??
+    c.req.header("x-vercel-forwarded-for") ??
+    "";
+  const first = forwarded.split(",")[0]?.trim();
+  return first || PROCESS_REQUEST_FALLBACK_ID;
+}
 
 app.onError((err, c) => {
   const message = err.message ?? String(err);
@@ -59,7 +83,7 @@ app.post("/anon/register", handleAnonRegister);
 app.post("/boards", handleCreateBoard);
 app.get("/boards/:boardId", handleGetBoard);
 
-app.use("/users/me", authMiddleware);
+app.use("/users/me/*", authMiddleware);
 app.get("/users/me/boards", handleMyBoards);
 app.post("/users/me/merge-anonymous", handleMergeAnonymous);
 
@@ -73,6 +97,27 @@ app.post("/sync", async (c, next) => {
   await next();
 });
 app.post("/sync", handleSync);
+
+app.get("/sessions/invite/:inviteCode", async (c, next) => {
+  if (!(await checkRateLimit(`invite:${requestIdentifier(c)}`))) {
+    return c.json({ error: "Too many requests", details: "Rate limit exceeded" }, 429);
+  }
+  await next();
+}, handleGetSessionInvite);
+app.post("/sessions", flexAuthMiddleware, handleCreateSession);
+app.post("/sessions/:id/join", flexAuthMiddleware, async (c, next) => {
+  const auth = c.get("resolvedAuth") as ResolvedAuth;
+  const identifier = auth?.appUserId ?? requestIdentifier(c);
+  if (!(await checkRateLimit(`join:${identifier}`))) {
+    return c.json({ error: "Too many requests", details: "Rate limit exceeded" }, 429);
+  }
+  await next();
+}, handleJoinSession);
+app.post("/sessions/:id/ready", flexAuthMiddleware, handleReadySession);
+app.post("/sessions/:id/begin", flexAuthMiddleware, handleBeginSession);
+app.post("/sessions/:id/finish", flexAuthMiddleware, handleFinishSession);
+app.post("/sessions/:id/leave", flexAuthMiddleware, handleLeaveSession);
+app.get("/sessions/:id", flexAuthMiddleware, handleGetSession);
 
 // So 404s are returned by our app (with CORS), not by the platform
 app.notFound((c) => c.json({ error: "Not found" }, 404));

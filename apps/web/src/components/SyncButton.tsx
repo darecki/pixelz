@@ -43,11 +43,11 @@ export default function SyncButton({ onSynced }: Props) {
   }
 
   return (
-    <div style={{ marginBottom: "1rem" }}>
-      <button onClick={handleSync} disabled={syncing || pendingCount === 0} style={{ padding: "0.5rem 1rem" }}>
+    <div className="flex items-center gap-sm mb-md flex-wrap">
+      <button onClick={handleSync} disabled={syncing || pendingCount === 0} className="btn btn-sm">
         {syncing ? "Syncing…" : `Sync now${pendingCount > 0 ? ` (${pendingCount} pending)` : ""}`}
       </button>
-      {message && <span style={{ marginLeft: "0.5rem", color: "#666" }}>{message}</span>}
+      {message && <span className="text-muted text-sm">{message}</span>}
     </div>
   );
 }

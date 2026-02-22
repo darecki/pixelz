@@ -88,58 +88,58 @@ export default function PlayStub({
   }
 
   return (
-    <div style={{ padding: "1rem", maxWidth: 400, margin: "0 auto" }}>
-      <h2>{isRandom ? `Random (seed: ${seed})` : `Level: ${levelId}`}</h2>
+    <div className="page-container page-container--narrow">
+      <h2 className="mb-md">{isRandom ? `Random (seed: ${seed})` : `Level: ${levelId}`}</h2>
 
       {!started ? (
         <div>
-          <p>Complete the level in as few moves as possible. Timer starts when you click Start.</p>
-          <button type="button" onClick={start} style={{ padding: "0.5rem 1rem" }}>
+          <p className="text-secondary mb-md">Complete the level in as few moves as possible. Timer starts when you click Start.</p>
+          <button type="button" onClick={start} className="btn btn-primary btn-lg">
             Start
           </button>
         </div>
       ) : !completed ? (
         <div>
-          <p>
-            <strong>Moves:</strong> {moves} &nbsp; <strong>Time:</strong> {(timeMs / 1000).toFixed(1)}s
+          <p className="game-stats mb-md">
+            Moves: <strong>{moves}</strong> &nbsp; Time: <strong>{(timeMs / 1000).toFixed(1)}s</strong>
           </p>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" onClick={makeMove} style={{ padding: "0.5rem 1rem" }}>
+          <div className="flex gap-sm">
+            <button type="button" onClick={makeMove} className="btn">
               Move (+1)
             </button>
-            <button type="button" onClick={finish} style={{ padding: "0.5rem 1rem" }}>
+            <button type="button" onClick={finish} className="btn btn-primary">
               Complete
             </button>
           </div>
         </div>
       ) : (
-        <div>
-          <p style={{ fontSize: "1.25rem" }}>
+        <div className="game-result">
+          <p style={{ fontSize: "1.25rem" }} className="mb-sm">
             <strong>Score: {finalScore}</strong> (moves: {moves}, time: {(timeMs / 1000).toFixed(1)}s)
           </p>
-          <p style={{ color: "#666" }}>
+          <p className="text-muted mb-md">
             Result saved offline. Sync to upload your score to the leaderboard.
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
+          <div className="game-result-actions">
             <button
               type="button"
               onClick={handleSyncAndViewLeaderboard}
               disabled={syncing}
-              style={{ padding: "0.5rem 1rem" }}
+              className="btn btn-primary"
             >
               {syncing ? "Syncing…" : "Sync and view leaderboard"}
             </button>
             <button
               type="button"
               onClick={() => navigate(`/leaderboard?level=${encodeURIComponent(leaderboardLevel)}`)}
-              style={{ padding: "0.5rem 1rem" }}
+              className="btn"
             >
               View leaderboard
             </button>
-            <button type="button" onClick={start} style={{ padding: "0.5rem 1rem" }}>
+            <button type="button" onClick={start} className="btn">
               Play again
             </button>
-            <button type="button" onClick={() => navigate("/")} style={{ padding: "0.5rem 1rem" }}>
+            <button type="button" onClick={() => navigate("/")} className="btn btn-ghost">
               Home
             </button>
           </div>

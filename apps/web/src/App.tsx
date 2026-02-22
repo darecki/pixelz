@@ -6,8 +6,12 @@ import Login from "./components/Login";
 import Home from "./pages/Home";
 import Leaderboard from "./pages/Leaderboard";
 import Play from "./pages/Play";
+import JoinSession from "./pages/JoinSession";
+import SessionRoom from "./pages/SessionRoom";
+import Configure from "./pages/Configure";
 import { mergeAnonymous, STORAGE_KEYS } from "./lib/api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import ThemeToggle from "./components/ThemeToggle";
 
 function Layout({ session, children }: { session: Session | null; children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -18,22 +22,21 @@ function Layout({ session, children }: { session: Session | null; children: Reac
   }
 
   return (
-    <div>
-      <nav style={{ padding: "0.5rem 1rem", borderBottom: "1px solid #ccc", marginBottom: "1rem" }}>
+    <div className="app-container">
+      <nav className="nav">
+        <Link to="/" className="nav-brand">PIXELZ</Link>
+        <Link to="/" className="nav-link">Home</Link>
+        <Link to="/leaderboard" className="nav-link">Leaderboard</Link>
+        <div className="nav-spacer" />
         {session ? (
           <>
-            <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
-            <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
-            <span style={{ marginRight: "1rem", color: "#666" }}>{session.user.email}</span>
-            <button type="button" onClick={signOut} style={{ padding: "0.25rem 0.5rem" }}>Sign out</button>
+            <span className="nav-user">{session.user.email}</span>
+            <button type="button" onClick={signOut} className="btn btn-ghost btn-sm">Sign out</button>
           </>
         ) : (
-          <>
-            <Link to="/" style={{ marginRight: "1rem" }}>Home</Link>
-            <Link to="/leaderboard" style={{ marginRight: "1rem" }}>Leaderboard</Link>
-            <Link to="/login" style={{ marginRight: "1rem" }}>Sign in</Link>
-          </>
+          <Link to="/login" className="btn btn-sm btn-primary">Sign in</Link>
         )}
+        <ThemeToggle />
       </nav>
       {children}
     </div>
@@ -71,7 +74,7 @@ export default function App() {
   }, []);
 
   if (loading) {
-    return <div style={{ padding: "2rem" }}>Loading…</div>;
+    return <div className="page-container"><p className="loading-text">Loading…</p></div>;
   }
 
   return (
@@ -80,9 +83,12 @@ export default function App() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/configure/:gameId" element={<Configure />} />
             <Route path="/login" element={<Login />} />
             <Route path="/play" element={<Play />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/join/:inviteCode" element={<JoinSession />} />
+            <Route path="/session/:sessionId" element={<SessionRoom />} />
           </Routes>
         </ErrorBoundary>
       </Layout>

@@ -23,7 +23,7 @@ export default function Play() {
   if (game?.id === "reflex") {
     const ReflexGame = game.component;
     return (
-      <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center" }}>Loading…</div>}>
+      <Suspense fallback={<div className="page-container"><p className="loading-text">Loading…</p></div>}>
         <ReflexGame levelId={effectiveLevel} />
       </Suspense>
     );
@@ -32,7 +32,7 @@ export default function Play() {
   if (game?.id === "pixelz" && levelId) {
     const PixelzGame = game.component;
     return (
-      <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center" }}>Loading…</div>}>
+      <Suspense fallback={<div className="page-container"><p className="loading-text">Loading…</p></div>}>
         <PixelzGame levelId={levelId} />
       </Suspense>
     );

@@ -1,6 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import { sql } from "./db.js";
+import { getOrCreateAppUserId } from "./users.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 if (!SUPABASE_URL) {
@@ -8,7 +9,17 @@ if (!SUPABASE_URL) {
 }
 
 const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", SUPABASE_URL.replace(/\/$/, ""));
-const SupabaseJWKS = jose.createRemoteJWKSet(jwksUrl);
+const SupabaseJWKS = jose.createRemoteJWKSet(jwksUrl, {
+  timeoutDuration: 3000,
+  cooldownDuration: 30_000,
+});
+const FLEX_AUTH_TIMEOUT_MS = 5000;
+
+function timeoutReject(ms: number, message: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(message)), ms);
+  });
+}
 
 /** Returns auth payload if token is valid, otherwise null. Does not send 401. */
 export async function verifyTokenOptional(token: string | null): Promise<AuthPayload | null> {
@@ -31,6 +42,12 @@ export type AuthPayload = {
   sub: string; // Supabase auth user id
   email?: string | null;
   nickname?: string | null;
+};
+
+export type ResolvedAuth = {
+  appUserId: string;
+  isAnonymous: boolean;
+  nickname: string | null;
 };
 
 /** Sync route accepts either JWT or X-Anonymous-Id. */
@@ -71,37 +88,74 @@ export const authMiddleware = createMiddleware<{
   }
 });
 
+/**
+ * Flexible auth middleware for routes that accept:
+ * - Bearer JWT (resolved to app user, created if needed)
+ * - X-Anonymous-Id (resolved to existing anonymous app user)
+ */
+export const flexAuthMiddleware = createMiddleware<{
+  Variables: { resolvedAuth: ResolvedAuth };
+}>(async (c, next) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const parsed = await Promise.race([
+      verifyTokenOptional(authHeader ?? null),
+      timeoutReject(FLEX_AUTH_TIMEOUT_MS, "Authentication lookup timed out"),
+    ]);
+    if (parsed) {
+      const appUserId = await getOrCreateAppUserId(
+        parsed.sub,
+        parsed.email ?? null,
+        parsed.nickname ?? null
+      );
+      c.set("resolvedAuth", {
+        appUserId,
+        isAnonymous: false,
+        nickname: parsed.nickname ?? null,
+      });
+      await next();
+      return;
+    }
+
+    const anonId = c.req.header("X-Anonymous-Id");
+    if (anonId) {
+      const appUserId = await getAnonymousAppUserId(anonId);
+      if (appUserId) {
+        c.set("resolvedAuth", { appUserId, isAnonymous: true, nickname: null });
+        await next();
+        return;
+      }
+    }
+
+    return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Authentication lookup timed out") {
+      return c.json({ error: msg }, 504);
+    }
+    throw err;
+  }
+});
+
 /** For POST /sync: accept either Bearer JWT or X-Anonymous-Id. */
 export const syncAuthMiddleware = createMiddleware<{
   Variables: { auth: SyncAuth };
 }>(async (c, next) => {
   const authHeader = c.req.header("Authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (token) {
-    try {
-      const { payload } = await jose.jwtVerify(token, SupabaseJWKS);
-      const sub = payload.sub as string;
-      if (!sub) {
-        return c.json({ error: "Invalid token payload" }, 401);
-      }
-      const email = (payload.email as string | undefined) ?? null;
-      const userMetadata = (payload.user_metadata as Record<string, unknown> | undefined) ?? {};
-      const nickname = (userMetadata.nickname as string | undefined) ?? null;
-      c.set("auth", { sub, email, nickname });
-      await next();
-      return;
-    } catch {
-      return c.json({ error: "Invalid or expired token" }, 401);
-    }
+  const parsed = await verifyTokenOptional(authHeader ?? null);
+  if (parsed) {
+    c.set("auth", parsed);
+    await next();
+    return;
   }
   const anonId = c.req.header("X-Anonymous-Id");
-  if (anonId) {
-    const appUserId = await getAnonymousAppUserId(anonId);
-    if (appUserId) {
-      c.set("auth", { anonymousAppUserId: appUserId });
-      await next();
-      return;
-    }
+  if (!anonId) {
+    return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
   }
-  return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
+  const appUserId = await getAnonymousAppUserId(anonId);
+  if (!appUserId) {
+    return c.json({ error: "Missing or invalid Authorization header or X-Anonymous-Id" }, 401);
+  }
+  c.set("auth", { anonymousAppUserId: appUserId });
+  await next();
 });
