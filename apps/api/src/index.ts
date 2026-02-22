@@ -83,7 +83,7 @@ app.post("/anon/register", handleAnonRegister);
 app.post("/boards", handleCreateBoard);
 app.get("/boards/:boardId", handleGetBoard);
 
-app.use("/users/me", authMiddleware);
+app.use("/users/me/*", authMiddleware);
 app.get("/users/me/boards", handleMyBoards);
 app.post("/users/me/merge-anonymous", handleMergeAnonymous);
 
