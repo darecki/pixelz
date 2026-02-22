@@ -155,6 +155,7 @@ export default function SessionRoom() {
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create next session");
+    } finally {
       setWorking(false);
     }
   }
@@ -171,6 +172,7 @@ export default function SessionRoom() {
   const opponentProgress = opponent ? progressByUser[opponent.userId] : null;
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
+    const canCreateNextSession = me?.role === "host";
     return (
       <div className="page-container">
         <div className="card">
@@ -187,9 +189,13 @@ export default function SessionRoom() {
             ))}
           </ul>
           <div className="flex gap-sm">
-            <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
-              Play Next Game
-            </button>
+            {canCreateNextSession ? (
+              <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
+                Play Next Game
+              </button>
+            ) : (
+              <span className="text-muted">Waiting for host to start the next game.</span>
+            )}
             <button type="button" onClick={() => navigate("/")} className="btn btn-ghost">Leave</button>
           </div>
         </div>
