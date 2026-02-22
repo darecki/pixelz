@@ -31,6 +31,7 @@ export default function Home() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [inviteCreating, setInviteCreating] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteReflexLevel, setInviteReflexLevel] = useState<string>("reflex_level_0");
 
   useEffect(() => {
     let cancelled = false;
@@ -98,7 +99,7 @@ export default function Home() {
           ? await createSession({
               game: "reflex",
               mode: "predefined",
-              levelId: selectedGame.levelIds[0] ?? "reflex_level_0",
+              levelId: inviteReflexLevel,
             })
           : await createSession({
               game: "pixelz",
@@ -186,6 +187,22 @@ export default function Home() {
         {selectedGame && (
           <>
             <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              {selectedGame?.id === "reflex" && (
+                <label style={{ fontSize: "0.9rem" }}>
+                  Level:{" "}
+                  <select
+                    value={inviteReflexLevel}
+                    onChange={(e) => setInviteReflexLevel(e.target.value)}
+                    style={{ marginLeft: "0.25rem" }}
+                  >
+                    {selectedGame.levelIds.map((id) => (
+                      <option key={id} value={id}>
+                        {REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS]} rounds
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 type="button"
                 onClick={handleCreateInvite}

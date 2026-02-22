@@ -102,8 +102,9 @@ async function getSessionWithPlayers(sessionId: string): Promise<{
   };
 }
 
-function sessionResponse(data: { session: SessionRow; players: SessionPlayerRow[] }) {
+function sessionResponse(data: { session: SessionRow; players: SessionPlayerRow[] }, currentUserId?: string) {
   return {
+    currentUserId: currentUserId ?? null,
     session: {
       id: data.session.id,
       game: data.session.game,
@@ -562,5 +563,5 @@ export async function handleGetSession(c: Context): Promise<Response> {
 
   const data = await getSessionWithPlayers(sessionId);
   if (!data) return c.json({ error: "Session not found" }, 404);
-  return c.json(sessionResponse(data));
+  return c.json(sessionResponse(data, auth.appUserId));
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchSessionInvite, joinSession, type SessionInvitePreview } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 export default function JoinSession() {
   const { inviteCode = "" } = useParams();
@@ -35,6 +36,9 @@ export default function JoinSession() {
     setError(null);
     try {
       await joinSession(preview.sessionId);
+      const ch = supabase.channel(`session:${preview.sessionId}`);
+      await ch.send({ type: "broadcast", event: "player_joined", payload: { sessionId: preview.sessionId } });
+      await supabase.removeChannel(ch);
       navigate(`/session/${encodeURIComponent(preview.sessionId)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join session");

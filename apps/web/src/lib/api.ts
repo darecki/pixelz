@@ -36,6 +36,7 @@ export type SessionInvitePreview = {
 };
 
 export type SessionResponse = {
+  currentUserId: string | null;
   session: {
     id: string;
     game: SessionGame;

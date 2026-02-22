@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import { handleGetSessionInvite } from "./sessions.js";
+import { handleCreateSession, handleGetSession, handleGetSessionInvite } from "./sessions.js";
 
 const { mockSql } = vi.hoisted(() => ({ mockSql: vi.fn() }));
 vi.mock("./db.js", () => ({ sql: mockSql }));
@@ -48,5 +48,38 @@ describe("GET /sessions/invite/:inviteCode", () => {
     app.get("/sessions/invite/:inviteCode", handleGetSessionInvite);
     const res = await app.request("/sessions/invite/missing");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("session auth guards", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+  });
+
+  it("rejects create session for anonymous identity", async () => {
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      (c as any).set("resolvedAuth", { appUserId: "anon-user", isAnonymous: true, nickname: null });
+      await next();
+    });
+    app.post("/sessions", handleCreateSession);
+    const res = await app.request("/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ game: "reflex", mode: "predefined", levelId: "reflex_level_0" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects get session for non-participant", async () => {
+    mockSql.mockResolvedValue([]);
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      (c as any).set("resolvedAuth", { appUserId: "user-1", isAnonymous: false, nickname: "u1" });
+      await next();
+    });
+    app.get("/sessions/:id", handleGetSession);
+    const res = await app.request("/sessions/session-1");
+    expect(res.status).toBe(403);
   });
 });
