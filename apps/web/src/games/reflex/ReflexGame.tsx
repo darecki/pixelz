@@ -95,6 +95,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
 
   function handleButtonClick(clickedColor: string) {
     if (phase !== "reaction" || !targetColor) return;
+    if (scoreSubmittedRef.current) return;
     if (clickedColor !== targetColor) {
       setPhase("gameover");
       return;
@@ -269,7 +270,12 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
                 JSON.stringify({ levelId, ...score })
               );
             }
-            navigate(`/login?redirect=/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`);
+            const redirect = `/leaderboard?${new URLSearchParams({
+              game: "reflex",
+              level: levelId,
+              justFinished: "1",
+            }).toString()}`;
+            navigate(`/login?${new URLSearchParams({ redirect }).toString()}`);
           }}
           onSkip={() => {
             setPhase("finished");

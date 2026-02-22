@@ -101,7 +101,7 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
 
   const handleColorClick = useCallback(
     (colorIndex: number) => {
-      if (!grid || won) return;
+      if (!grid || won || scoreSubmittedRef.current) return;
       const currentColor = grid[0][0];
       if (colorIndex === currentColor) return;
       const start = startTime ?? Date.now();
@@ -149,13 +149,12 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
             
             try {
               const leaderboard = await fetchLeaderboard(levelId);
-              const lowerIsBetter = true;
               const entries = leaderboard.entries;
               let rank = entries.length + 1;
-              
+
               for (let i = 0; i < entries.length; i++) {
                 const entry = entries[i];
-                if (lowerIsBetter ? score < entry.score : score > entry.score) {
+                if (score < entry.score || (score === entry.score && elapsed < entry.timeMs)) {
                   rank = i + 1;
                   break;
                 }
@@ -323,7 +322,12 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
                 JSON.stringify({ levelId, ...score })
               );
             }
-            navigate(`/login?redirect=/leaderboard?game=pixelz&level=${encodeURIComponent(levelId)}&justFinished=1`);
+            const redirect = `/leaderboard?${new URLSearchParams({
+              game: "pixelz",
+              level: levelId,
+              justFinished: "1",
+            }).toString()}`;
+            navigate(`/login?${new URLSearchParams({ redirect }).toString()}`);
           }}
           onSkip={() => {
             setShowSignInPrompt(false);
