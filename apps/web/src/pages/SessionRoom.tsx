@@ -159,9 +159,9 @@ export default function SessionRoom() {
     }
   }
 
-  if (loading) return <div style={{ padding: "1rem" }}>Loading session…</div>;
-  if (error) return <div style={{ padding: "1rem", color: "#c00" }}>{error}</div>;
-  if (!data) return <div style={{ padding: "1rem" }}>Session not found.</div>;
+  if (loading) return <div className="page-container"><p className="loading-text">Loading session…</p></div>;
+  if (error) return <div className="page-container"><p className="text-error">{error}</p></div>;
+  if (!data) return <div className="page-container"><p className="text-muted">Session not found.</p></div>;
 
   const game = getGameById(data.session.game);
   const GameComponent = game?.component;
@@ -172,23 +172,26 @@ export default function SessionRoom() {
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
     return (
-      <div style={{ padding: "1rem", maxWidth: 720 }}>
-        <h2>Session Results</h2>
-        <p>Status: {data.session.status}</p>
-        <ul style={{ paddingLeft: "1rem" }}>
-          {data.players.map((p) => (
-            <li key={p.userId}>
-              {p.nickname ?? p.userId} - {p.status}
-              {p.timeMs != null ? ` - ${(p.timeMs / 1000).toFixed(2)}s` : ""}
-              {p.score != null ? ` - score ${p.score}` : ""}
-            </li>
-          ))}
-        </ul>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button type="button" onClick={handlePlayNextGame} disabled={working}>
-            Play Next Game
-          </button>
-          <button type="button" onClick={() => navigate("/")}>Leave</button>
+      <div className="page-container">
+        <div className="card">
+          <h2 className="mb-md">Session Results</h2>
+          <p className="text-secondary mb-sm">Status: <span className="badge">{data.session.status}</span></p>
+          <ul className="lobby-players">
+            {data.players.map((p) => (
+              <li key={p.userId} className="lobby-player">
+                <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
+                <span className="badge">{p.status}</span>
+                {p.timeMs != null && <span className="text-sm"> {(p.timeMs / 1000).toFixed(2)}s</span>}
+                {p.score != null && <span className="text-sm"> score {p.score}</span>}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-sm">
+            <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
+              Play Next Game
+            </button>
+            <button type="button" onClick={() => navigate("/")} className="btn btn-ghost">Leave</button>
+          </div>
         </div>
       </div>
     );
@@ -200,53 +203,58 @@ export default function SessionRoom() {
         ? `${window.location.origin}/join/${encodeURIComponent(data.session.inviteCode)}`
         : `/join/${encodeURIComponent(data.session.inviteCode)}`;
     return (
-      <div style={{ padding: "1rem", maxWidth: 720 }}>
-        <h2>Lobby</h2>
-        <p>Game: {data.session.game}</p>
-        <p>Players: {data.players.length} / {data.session.maxPlayers}</p>
-        <ul style={{ paddingLeft: "1rem" }}>
-          {data.players.map((p) => (
-            <li key={p.userId}>
-              {p.nickname ?? p.userId} - {p.role} - {p.status}
-              {onlineSet.has(p.userId) ? " (online)" : " (offline)"}
-            </li>
-          ))}
-        </ul>
-        <p style={{ fontSize: "0.9rem", color: "#666", wordBreak: "break-all" }}>Invite link: {inviteUrl}</p>
-        {data.session.status === "ready" && (
-          <p>Game starts in: {Math.max(0, Math.ceil(remainingMs / 1000))}s</p>
-        )}
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="button"
-            onClick={handleReady}
-            disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished"}
-          >
-            {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : "Ready"}
-          </button>
-          <button type="button" onClick={handleLeave} disabled={working}>
-            Leave
-          </button>
+      <div className="page-container">
+        <div className="card">
+          <h2 className="mb-md">Lobby</h2>
+          <p className="text-secondary mb-sm">Game: <strong>{data.session.game}</strong></p>
+          <p className="text-secondary mb-md">Players: <strong>{data.players.length} / {data.session.maxPlayers}</strong></p>
+          <ul className="lobby-players">
+            {data.players.map((p) => (
+              <li key={p.userId} className="lobby-player">
+                {onlineSet.has(p.userId) ? <span className="online-dot" /> : <span className="offline-dot" />}
+                <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
+                <span className="badge">{p.role}</span>
+                <span className="badge">{p.status}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="invite-link mb-md">{inviteUrl}</div>
+          {data.session.status === "ready" && (
+            <p className="text-secondary mb-sm">Game starts in: <strong>{Math.max(0, Math.ceil(remainingMs / 1000))}s</strong></p>
+          )}
+          <div className="flex gap-sm">
+            <button
+              type="button"
+              onClick={handleReady}
+              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished"}
+              className="btn btn-primary"
+            >
+              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : "Ready"}
+            </button>
+            <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
+              Leave
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   if (!GameComponent || !data.session.levelId) {
-    return <div style={{ padding: "1rem", color: "#c00" }}>Unable to render game session.</div>;
+    return <div className="page-container"><p className="text-error">Unable to render game session.</p></div>;
   }
 
   return (
     <div>
       {opponent && (
-        <div style={{ padding: "0.5rem 1rem", fontSize: "0.9rem", color: "#333" }}>
-          Opponent: {opponent.nickname ?? opponent.userId}
+        <div className="opponent-bar">
+          Opponent: <strong>{opponent.nickname ?? opponent.userId}</strong>
           {opponentProgress
             ? ` · ${opponentProgress.moves} moves · ${(opponentProgress.timeMs / 1000).toFixed(1)}s`
             : " · no progress yet"}
         </div>
       )}
-      <Suspense fallback={<div style={{ padding: "1rem" }}>Loading game…</div>}>
+      <Suspense fallback={<div className="page-container"><p className="loading-text">Loading game…</p></div>}>
         <GameComponent
           levelId={data.session.levelId}
           sessionProps={{
@@ -257,7 +265,7 @@ export default function SessionRoom() {
         />
       </Suspense>
       <div style={{ padding: "0.5rem 1rem" }}>
-        <button type="button" onClick={handleLeave} disabled={working}>
+        <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost btn-sm">
           Leave Session
         </button>
       </div>

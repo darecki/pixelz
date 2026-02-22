@@ -153,52 +153,42 @@ export default function Leaderboard() {
     return `${latest.userId}-${latest.createdAt}`;
   }, [data?.entries, data?.currentUserId, justFinished]);
 
-  if (loading) return <p>Loading leaderboard…</p>;
-  if (error) return <p style={{ color: "#c00" }}>{error}</p>;
+  if (loading) return <div className="page-container"><p className="loading-text">Loading leaderboard…</p></div>;
+  if (error) return <div className="page-container"><p className="text-error">{error}</p></div>;
   if (!data) return null;
 
   const colSpan = isPixelz ? 6 : 4;
 
   return (
-    <div>
-      <h2 style={{ marginBottom: "1rem" }}>Leaderboard</h2>
+    <div className="page-container page-container--wide">
+      <div className="page-header">
+        <h2>Leaderboard</h2>
+      </div>
 
       {/* Game picker */}
-      <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
+      <div className="btn-group mb-md">
         <button
           type="button"
           onClick={() => setGame("reflex")}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: 4,
-            border: "1px solid #ccc",
-            background: game === "reflex" ? "#eee" : "transparent",
-            fontWeight: game === "reflex" ? 600 : 400,
-          }}
+          className={`btn-toggle ${game === "reflex" ? "btn-toggle--active" : ""}`}
         >
           Reflex
         </button>
         <button
           type="button"
           onClick={() => setGame("pixelz")}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: 4,
-            border: "1px solid #ccc",
-            background: game === "pixelz" ? "#eee" : "transparent",
-            fontWeight: game === "pixelz" ? 600 : 400,
-          }}
+          className={`btn-toggle ${game === "pixelz" ? "btn-toggle--active" : ""}`}
         >
           Pixelz
         </button>
       </div>
 
       {/* Level / board picker */}
-      <div style={{ marginBottom: "1rem", display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "flex-start" }}>
+      <div className="flex flex-wrap gap-md items-center mb-lg" style={{ alignItems: "flex-start" }}>
         {game === "reflex" ? (
-          <label>
+          <label className="text-sm">
             Level:{" "}
-            <select value={effectiveLevel} onChange={(e) => setLevel(e.target.value)}>
+            <select value={effectiveLevel} onChange={(e) => setLevel(e.target.value)} className="input input--inline" style={{ width: 160 }}>
               {REFLEX_LEVEL_IDS.map((id) => (
                 <option key={id} value={id}>
                   {REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS]} rounds
@@ -208,74 +198,62 @@ export default function Leaderboard() {
           </label>
         ) : (
           <>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+            <div className="btn-group">
               {PIXELZ_LEVEL_IDS.map((id) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setLevel(id)}
-                  style={{
-                    padding: "0.35rem 0.6rem",
-                    borderRadius: 4,
-                    border: "1px solid #ccc",
-                    background: effectiveLevel === id ? "#e3f2fd" : "transparent",
-                    fontSize: "0.9rem",
-                  }}
+                  className={`btn-toggle ${effectiveLevel === id ? "btn-toggle--active" : ""}`}
                 >
                   {PIXELZ_LEVELS[id]}
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <div className="flex gap-sm items-center">
               <input
                 type="text"
                 value={pixelzBoardInput}
                 onChange={(e) => setPixelzBoardInput(e.target.value)}
                 placeholder="Board ID (pixelz_...)"
+                className="input input--inline"
                 style={{ width: 200 }}
               />
               <button
                 type="button"
                 onClick={() => pixelzBoardInput.trim() && setLevel(pixelzBoardInput.trim())}
-                style={{ padding: "0.35rem 0.6rem" }}
+                className="btn btn-sm"
               >
                 Go
               </button>
             </div>
             {myBoardsLoading ? (
-              <span style={{ fontSize: "0.9rem", color: "#666" }}>Loading my boards…</span>
+              <span className="text-muted text-sm">Loading my boards…</span>
             ) : myBoardIds.length > 0 ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-                <span style={{ fontSize: "0.9rem", color: "#666" }}>My boards:</span>
+              <div className="flex flex-wrap gap-sm items-center">
+                <span className="text-muted text-sm">My boards:</span>
                 {myBoardIds.slice(0, 8).map((id) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setLevel(id)}
-                    style={{
-                      padding: "0.25rem 0.5rem",
-                      borderRadius: 4,
-                      border: "1px solid #ccc",
-                      background: effectiveLevel === id ? "#e8f5e9" : "transparent",
-                      fontSize: "0.8rem",
-                      maxWidth: 140,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
+                    className={`btn-toggle ${effectiveLevel === id ? "btn-toggle--active" : ""}`}
                     title={id}
+                    style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     {isPredefinedPixelzLevel(id) ? PIXELZ_LEVELS[id] : id.slice(0, 12) + "…"}
                   </button>
                 ))}
                 {myBoardIds.length > 8 && (
-                  <span style={{ fontSize: "0.85rem", color: "#666" }}>+{myBoardIds.length - 8} more</span>
+                  <span className="text-muted text-xs">+{myBoardIds.length - 8} more</span>
                 )}
               </div>
             ) : null}
             {isPixelz && (
               <Link
                 to={`/play?game=pixelz&level=${encodeURIComponent(effectiveLevel)}`}
-                style={{ padding: "0.5rem 1rem", background: "#e3f2fd", borderRadius: 4, marginLeft: "auto" }}
+                className="btn btn-sm btn-primary"
+                style={{ marginLeft: "auto" }}
               >
                 Play this board
               </Link>
@@ -284,61 +262,59 @@ export default function Leaderboard() {
         )}
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: "left", padding: "0.5rem" }}>Rank</th>
-            <th style={{ textAlign: "left", padding: "0.5rem" }}>User</th>
-            {isPixelz && (
-              <>
-                <th style={{ textAlign: "right", padding: "0.5rem" }}>Score</th>
-                <th style={{ textAlign: "right", padding: "0.5rem" }}>Moves</th>
-              </>
-            )}
-            <th style={{ textAlign: "right", padding: "0.5rem" }}>Time (s)</th>
-            <th style={{ textAlign: "left", padding: "0.5rem" }}>When</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.entries.length === 0 ? (
+      <div className="table-container">
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={colSpan} style={{ padding: "1rem", color: "#666" }}>
-                No entries yet.
-              </td>
+              <th>Rank</th>
+              <th>User</th>
+              {isPixelz && (
+                <>
+                  <th className="text-right">Score</th>
+                  <th className="text-right">Moves</th>
+                </>
+              )}
+              <th className="text-right">Time (s)</th>
+              <th>When</th>
             </tr>
-          ) : (
-            data.entries.map((e) => {
-              const rowKey = `${e.userId}-${e.createdAt}`;
-              const isHighlighted = highlightedRowKey === rowKey;
-              return (
-                <tr
-                  key={rowKey}
-                  style={
-                    isHighlighted
-                      ? { backgroundColor: "rgba(255, 220, 100, 0.35)" }
-                      : undefined
-                  }
-                >
-                  <td style={{ padding: "0.5rem" }}>{e.rank}</td>
-                  <td style={{ padding: "0.5rem" }}>{displayUser(e)}</td>
-                  {isPixelz && (
-                    <>
-                      <td style={{ textAlign: "right", padding: "0.5rem" }}>{e.score.toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "0.5rem" }}>{e.moves}</td>
-                    </>
-                  )}
-                  <td style={{ textAlign: "right", padding: "0.5rem" }}>
-                    {(e.timeMs / 1000).toFixed(2)}
-                  </td>
-                  <td style={{ padding: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
-                    {formatTimestamp(e.createdAt)}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.entries.length === 0 ? (
+              <tr>
+                <td colSpan={colSpan} className="text-muted" style={{ padding: "1.5rem" }}>
+                  No entries yet.
+                </td>
+              </tr>
+            ) : (
+              data.entries.map((e) => {
+                const rowKey = `${e.userId}-${e.createdAt}`;
+                const isHighlighted = highlightedRowKey === rowKey;
+                return (
+                  <tr
+                    key={rowKey}
+                    className={isHighlighted ? "table-row--highlight" : ""}
+                  >
+                    <td>{e.rank}</td>
+                    <td>{displayUser(e)}</td>
+                    {isPixelz && (
+                      <>
+                        <td className="text-right">{e.score.toLocaleString()}</td>
+                        <td className="text-right">{e.moves}</td>
+                      </>
+                    )}
+                    <td className="text-right">
+                      {(e.timeMs / 1000).toFixed(2)}
+                    </td>
+                    <td className="text-muted text-sm">
+                      {formatTimestamp(e.createdAt)}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

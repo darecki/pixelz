@@ -14,7 +14,7 @@ type Props = {
   hideIfNoAuth?: boolean;
 };
 
-export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }: Props) {
+export default function GameOverNickname({ disabled, hideIfNoAuth }: Props) {
   const [displayNickname, setDisplayNickname] = useState("");
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -74,17 +74,16 @@ export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }
     }
   }
 
-  const baseButtonStyle = buttonStyle ?? { padding: "0.4rem 0.75rem" };
   const label = displayNickname.trim() || "…";
 
   return (
-    <div style={{ marginTop: "0.5rem", marginBottom: "0.5rem" }}>
-      <p style={{ color: "#666", marginBottom: "0.5rem", fontSize: "0.9rem" }}>
+    <div className="mt-sm mb-sm">
+      <p className="text-muted text-sm">
         Saved to leaderboard as{" "}
-        <strong>{label}</strong>
+        <strong style={{ color: "var(--text-primary)" }}>{label}</strong>
         {!editing && (
           <>
-            {"."}{" "}
+            .{" "}
             <button
               type="button"
               onClick={() => {
@@ -93,7 +92,8 @@ export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }
                 setError(null);
               }}
               disabled={disabled}
-              style={baseButtonStyle}
+              className="btn btn-ghost btn-sm"
+              style={{ display: "inline-flex", verticalAlign: "baseline", padding: "0.2rem 0.5rem" }}
             >
               Change
             </button>
@@ -101,8 +101,8 @@ export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }
         )}
       </p>
       {editing && (
-        <form onSubmit={handleUpdate} style={{ marginTop: "0.5rem" }}>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <form onSubmit={handleUpdate} className="mt-sm">
+          <div className="flex gap-sm items-center flex-wrap">
             <input
               id="gameover-nickname-edit"
               type="text"
@@ -112,13 +112,14 @@ export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }
               maxLength={NICKNAME_MAX}
               placeholder="e.g. player1"
               disabled={disabled || updating}
-              style={{ padding: "0.4rem 0.5rem", width: "min(180px, 50vw)", fontSize: "1rem" }}
+              className="input input--inline"
+              style={{ width: "min(180px, 50vw)" }}
               autoFocus
             />
             <button
               type="submit"
               disabled={disabled || updating || editValue.trim().length < NICKNAME_MIN}
-              style={baseButtonStyle}
+              className="btn btn-sm btn-primary"
             >
               {updating ? "…" : "Update"}
             </button>
@@ -126,12 +127,12 @@ export default function GameOverNickname({ disabled, buttonStyle, hideIfNoAuth }
               type="button"
               onClick={() => { setEditing(false); setError(null); }}
               disabled={updating}
-              style={baseButtonStyle}
+              className="btn btn-sm btn-ghost"
             >
               Cancel
             </button>
           </div>
-          {error && <p style={{ color: "#c00", fontSize: "0.9rem", marginTop: "0.25rem", marginBottom: 0 }}>{error}</p>}
+          {error && <p className="text-error text-sm mt-sm">{error}</p>}
         </form>
       )}
     </div>

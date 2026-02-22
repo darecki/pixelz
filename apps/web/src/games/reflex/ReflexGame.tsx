@@ -222,71 +222,16 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     }, DELAY_AFTER_CORRECT_MS);
   }
 
-  const containerStyle: React.CSSProperties = {
-    padding: "clamp(0.5rem, 2vmin, 1rem)",
-    maxWidth: 480,
-    margin: "0 auto",
-    minHeight: "100dvh",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    boxSizing: "border-box",
-    touchAction: "manipulation",
-  };
-
-  const targetStyle: React.CSSProperties = {
-    width: "min(90vw, 320px)",
-    height: "clamp(120px, 28vmin, 180px)",
-    backgroundColor: phase === "reaction" && targetColor ? targetColor : "#f5f5f5",
-    borderRadius: 12,
-    marginBottom: "clamp(0.75rem, 3vmin, 1.5rem)",
-    transition: "background-color 0.05s",
-  };
-
-  const countdownStyle: React.CSSProperties = {
-    fontSize: "clamp(2.5rem, 12vmin, 5rem)",
-    fontWeight: 700,
-    marginBottom: "clamp(0.5rem, 2vmin, 1rem)",
-    minHeight: "1.2em",
-  };
-
-  const buttonRowStyle: React.CSSProperties = {
-    display: "flex",
-    gap: "clamp(6px, 2vmin, 12px)",
-    justifyContent: "center",
-    flexWrap: "wrap",
-  };
-
-  const colorButtonStyle = (color: string): React.CSSProperties => ({
-    width: "clamp(52px, 15vmin, 72px)",
-    height: "clamp(52px, 15vmin, 72px)",
-    minWidth: 52,
-    minHeight: 52,
-    backgroundColor: color,
-    border: "3px solid #333",
-    borderRadius: 12,
-    cursor: phase === "reaction" ? "pointer" : "default",
-    pointerEvents: phase === "reaction" ? "auto" : "none",
-    opacity: phase === "reaction" ? 1 : 0.6,
-    touchAction: "manipulation",
-  });
-
-  const ctaButtonStyle: React.CSSProperties = {
-    padding: "clamp(12px, 3vmin, 16px) clamp(20px, 5vmin, 28px)",
-    minHeight: 44,
-    margin: "4px",
-    touchAction: "manipulation",
-  };
+  const isReacting = phase === "reaction";
 
   if (phase === "idle" && !sessionProps) {
     return (
-      <div style={containerStyle}>
-        <h2 style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "0.5rem" }}>Reflex</h2>
-        <p style={{ marginBottom: "1rem", textAlign: "center" }}>
+      <div className="game-container" style={{ justifyContent: "center" }}>
+        <h2 className="game-title">Reflex</h2>
+        <p className="text-secondary text-center mb-md">
           {totalRounds} rounds. After the countdown, tap the button that matches the color.
         </p>
-        <button type="button" onClick={startGame} style={ctaButtonStyle}>
+        <button type="button" onClick={startGame} className="btn btn-primary btn-lg">
           Start
         </button>
       </div>
@@ -295,24 +240,26 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
 
   if (phase === "gameover") {
     return (
-      <div style={containerStyle}>
-        <h2 style={{ color: "#c00", marginBottom: "0.5rem" }}>Wrong color!</h2>
-        <p style={{ marginBottom: "1rem" }}>
-          Round {round} of {totalRounds}. Total time: {(cumulativeTimeMs / 1000).toFixed(2)}s
+      <div className="game-container game-result" style={{ justifyContent: "center" }}>
+        <h2 style={{ color: "var(--color-error)" }}>Wrong color!</h2>
+        <p className="game-result-stats">
+          Round {round} of {totalRounds}. Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <button type="button" onClick={startGame} style={ctaButtonStyle}>
-          Play again
-        </button>
-        <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle}>
-          Home
-        </button>
+        <div className="game-result-actions">
+          <button type="button" onClick={startGame} className="btn btn-primary btn-lg">
+            Play again
+          </button>
+          <button type="button" onClick={() => navigate("/")} className="btn btn-ghost btn-lg">
+            Home
+          </button>
+        </div>
       </div>
     );
   }
 
   if (phase === "prompting") {
     return (
-      <div style={containerStyle}>
+      <div className="game-container" style={{ justifyContent: "center" }}>
         <SignInPrompt
           rank={promptRank}
           onSignIn={() => {
@@ -340,17 +287,17 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
 
   if (phase === "submitError") {
     return (
-      <div style={containerStyle}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Submit failed</h2>
-        <p style={{ color: "#c00", marginBottom: "0.75rem" }}>{submitError ?? "Failed to submit result."}</p>
-        <p style={{ marginBottom: "1rem" }}>
+      <div className="game-container game-result" style={{ justifyContent: "center" }}>
+        <h2>Submit failed</h2>
+        <p className="text-error mb-sm">{submitError ?? "Failed to submit result."}</p>
+        <p className="game-result-stats">
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button type="button" onClick={() => submitSessionCompletion().catch(() => {})} style={ctaButtonStyle}>
+        <div className="game-result-actions">
+          <button type="button" onClick={() => submitSessionCompletion().catch(() => {})} className="btn btn-primary btn-lg">
             Retry submit
           </button>
-          <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle}>
+          <button type="button" onClick={() => navigate("/")} className="btn btn-ghost btn-lg">
             Leave
           </button>
         </div>
@@ -360,28 +307,26 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
 
   if (phase === "saving" || phase === "finished") {
     return (
-      <div style={containerStyle}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Done!</h2>
-        <p style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)", marginBottom: "1rem" }}>
+      <div className="game-container game-result" style={{ justifyContent: "center" }}>
+        <h2>Done! 🎉</h2>
+        <p className="game-result-stats" style={{ fontSize: "clamp(1.25rem, 5vmin, 1.5rem)" }}>
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
         </p>
-        {phase === "saving" && (
-          <p style={{ color: "#666", marginBottom: "0.25rem", fontSize: "0.9rem" }}>Saving…</p>
-        )}
-        <GameOverNickname disabled={phase === "saving"} buttonStyle={ctaButtonStyle} hideIfNoAuth={true} />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "center" }}>
+        {phase === "saving" && <p className="loading-text text-sm">Saving…</p>}
+        <GameOverNickname disabled={phase === "saving"} hideIfNoAuth={true} />
+        <div className="game-result-actions">
           <button
             type="button"
             onClick={() => navigate(`/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`)}
-            style={ctaButtonStyle}
+            className="btn btn-primary"
             disabled={phase === "saving"}
           >
             View leaderboard
           </button>
-          <button type="button" onClick={startGame} style={ctaButtonStyle} disabled={phase === "saving"}>
+          <button type="button" onClick={startGame} className="btn" disabled={phase === "saving"}>
             Play again
           </button>
-          <button type="button" onClick={() => navigate("/")} style={ctaButtonStyle} disabled={phase === "saving"}>
+          <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={phase === "saving"}>
             Home
           </button>
         </div>
@@ -390,24 +335,28 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   }
 
   return (
-    <div style={containerStyle}>
-      <p style={{ marginBottom: "0.25rem", fontSize: "clamp(0.9rem, 2.5vmin, 1rem)" }}>
-        Round {round} / {totalRounds}
-        {cumulativeTimeMs > 0 && ` · ${(cumulativeTimeMs / 1000).toFixed(2)}s`}
+    <div className="game-container" style={{ justifyContent: "center" }}>
+      <p className="game-stats">
+        Round <strong>{round}</strong> / {totalRounds}
+        {cumulativeTimeMs > 0 && <> · <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong></>}
       </p>
-      <div style={targetStyle} />
-      <div style={countdownStyle}>
+      <div
+        className={`reflex-target ${!isReacting ? "reflex-target--idle" : ""}`}
+        style={isReacting && targetColor ? { backgroundColor: targetColor } : undefined}
+      />
+      <div className="countdown-number">
         {phase === "countdown" && COUNTDOWN_STEPS[countdownStep] !== undefined && (
           <span>{COUNTDOWN_STEPS[countdownStep]}</span>
         )}
         {phase === "delay" && "✓"}
       </div>
-      <div style={buttonRowStyle}>
+      <div className="color-btn-row">
         {REFLEX_COLORS.map((color) => (
           <button
             key={color}
             type="button"
-            style={colorButtonStyle(color)}
+            className={`reflex-color-btn ${!isReacting ? "reflex-color-btn--disabled" : ""}`}
+            style={{ backgroundColor: color }}
             onClick={() => handleButtonClick(color)}
             aria-label={`Color ${color}`}
           />

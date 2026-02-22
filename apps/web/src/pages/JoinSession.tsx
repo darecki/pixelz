@@ -47,32 +47,34 @@ export default function JoinSession() {
     }
   }
 
-  if (loading) return <div style={{ padding: "1rem" }}>Loading invite…</div>;
-  if (error) return <div style={{ padding: "1rem", color: "#c00" }}>{error}</div>;
-  if (!preview) return <div style={{ padding: "1rem" }}>Invite not found.</div>;
+  if (loading) return <div className="page-container"><p className="loading-text">Loading invite…</p></div>;
+  if (error) return <div className="page-container"><p className="text-error">{error}</p></div>;
+  if (!preview) return <div className="page-container"><p className="text-muted">Invite not found.</p></div>;
 
   return (
-    <div style={{ padding: "1rem", maxWidth: 520 }}>
-      <h2>Game Invite</h2>
-      <p>
-        <strong>Game:</strong> {preview.game}
-      </p>
-      {preview.hostNickname && (
-        <p>
-          <strong>Host:</strong> {preview.hostNickname}
+    <div className="page-container page-container--narrow">
+      <div className="card">
+        <h2 className="mb-md">Game Invite</h2>
+        <p className="mb-sm">
+          <span className="text-secondary">Game:</span> <strong>{preview.game}</strong>
         </p>
-      )}
-      <p>
-        <strong>Status:</strong> {preview.status}
-      </p>
-      <button type="button" onClick={handleJoin} disabled={joining || preview.status !== "waiting"}>
-        {joining ? "Joining…" : "Join Game"}
-      </button>
-      {preview.status !== "waiting" && (
-        <p style={{ marginTop: "0.75rem", color: "#666" }}>
-          This session is no longer accepting new players.
+        {preview.hostNickname && (
+          <p className="mb-sm">
+            <span className="text-secondary">Host:</span> <strong>{preview.hostNickname}</strong>
+          </p>
+        )}
+        <p className="mb-md">
+          <span className="text-secondary">Status:</span> <span className="badge">{preview.status}</span>
         </p>
-      )}
+        <button type="button" onClick={handleJoin} disabled={joining || preview.status !== "waiting"} className="btn btn-primary w-full">
+          {joining ? "Joining…" : "Join Game"}
+        </button>
+        {preview.status !== "waiting" && (
+          <p className="text-muted mt-md text-center">
+            This session is no longer accepting new players.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

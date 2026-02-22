@@ -71,69 +71,67 @@ export default function Login() {
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: "2rem auto", padding: "0 1rem" }}>
-      <h2>{mode === "signin" ? "Sign in" : "Sign up"}</h2>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "0.75rem" }}>
-          <label htmlFor="email" style={{ display: "block", marginBottom: "0.25rem" }}>
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
-        </div>
-        {mode === "signup" && (
-          <div style={{ marginBottom: "0.75rem" }}>
-            <label htmlFor="nickname" style={{ display: "block", marginBottom: "0.25rem" }}>
-              Nickname (for leaderboard)
-            </label>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2 className="text-center mb-md">{mode === "signin" ? "Sign in" : "Sign up"}</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
             <input
-              id="nickname"
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              maxLength={32}
-              placeholder="e.g. player1"
-              style={{ width: "100%", padding: "0.5rem" }}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="input"
             />
           </div>
-        )}
-        <div style={{ marginBottom: "0.75rem" }}>
-          <label htmlFor="password" style={{ display: "block", marginBottom: "0.25rem" }}>
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            style={{ width: "100%", padding: "0.5rem" }}
-          />
-        </div>
-        {message && <p style={{ color: "#c00", marginBottom: "0.75rem" }}>{message}</p>}
-        <button type="submit" disabled={loading} style={{ padding: "0.5rem 1rem", marginRight: "0.5rem" }}>
-          {loading ? "..." : mode === "signin" ? "Sign in" : "Sign up"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          style={{ padding: "0.5rem 1rem" }}
-        >
-          {mode === "signin" ? "Sign up instead" : "Sign in instead"}
-        </button>
-      </form>
-      <p style={{ marginTop: "1rem" }}>
+          {mode === "signup" && (
+            <div className="form-group">
+              <label htmlFor="nickname">Nickname (for leaderboard)</label>
+              <input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={32}
+                placeholder="e.g. player1"
+                className="input"
+              />
+            </div>
+          )}
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="input"
+            />
+          </div>
+          {message && <p className="text-error text-sm mb-md">{message}</p>}
+          <div className="flex gap-sm">
+            <button type="submit" disabled={loading} className="btn btn-primary w-full">
+              {loading ? "..." : mode === "signin" ? "Sign in" : "Sign up"}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+            className="btn btn-ghost w-full mt-sm"
+          >
+            {mode === "signin" ? "Sign up instead" : "Sign in instead"}
+          </button>
+        </form>
+      </div>
+      <div className="auth-footer">
         <Link to="/">Play without account</Link>
         {" · "}
         <Link to="/leaderboard">View leaderboard</Link>
-      </p>
+      </div>
     </div>
   );
 }

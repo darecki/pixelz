@@ -121,128 +121,124 @@ export default function Configure() {
   }
 
   return (
-    <div style={{ padding: "0 1rem", maxWidth: 600 }}>
-      {/* Back link */}
-      <div style={{ marginBottom: "1rem" }}>
-        <Link to="/" style={{ color: "#1e88e5", textDecoration: "none", fontSize: "0.95rem" }}>
-          &larr; Back to Games
-        </Link>
+    <div className="page-container">
+      <Link to="/" className="back-link">← Back to Games</Link>
+
+      <div className="page-header">
+        <h2>Configure {selectedGame.name}</h2>
       </div>
 
-      <h2 style={{ marginBottom: "1.5rem" }}>Configure {selectedGame.name}</h2>
-
       {/* ── Solo Play ── */}
-      <section style={{ marginBottom: "2rem" }}>
-        <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Play solo</h3>
+      <section className="config-section">
+        <h3 className="section-title">Play solo</h3>
         {selectedGame.levelType === "board" && selectedGame.id === "pixelz" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: 420 }}>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+          <div className="flex flex-col gap-md">
+            <div className="btn-group">
               {PIXELZ_LEVEL_IDS.map((id) => (
-                <Link
-                  key={id}
-                  to={`/play?game=pixelz&level=${id}`}
-                  style={{ padding: "0.5rem 0.75rem", background: "#eee", borderRadius: 4, textDecoration: "none", color: "#333" }}
-                >
+                <Link key={id} to={`/play?game=pixelz&level=${id}`} className="btn btn-sm">
                   {PIXELZ_LEVELS[id]}
                 </Link>
               ))}
               <button
                 type="button"
                 onClick={() => setShowCustomPixelz((v) => !v)}
-                style={{ padding: "0.5rem 0.75rem", background: "#e3f2fd", borderRadius: 4, cursor: "pointer", border: "1px solid #bbdefb" }}
+                className={`btn btn-sm ${showCustomPixelz ? "btn-primary" : ""}`}
               >
-                {showCustomPixelz ? "Hide custom" : "Generate custom board"}
+                {showCustomPixelz ? "Hide custom" : "Custom board"}
               </button>
             </div>
             {showCustomPixelz && (
-              <div style={{ padding: "1rem", background: "#f5f5f5", borderRadius: 8 }}>
-                <p style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: 600 }}>Custom board:</p>
-                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-                  <label style={{ fontSize: "0.9rem" }}>
-                    Width:{" "}
+              <div className="config-panel">
+                <p className="font-semibold text-sm mb-sm">Custom board settings:</p>
+                <div className="config-row">
+                  <label className="text-sm">
+                    Width{" "}
                     <input
                       type="number"
                       min={1}
                       max={30}
                       value={pixelzParams.width}
                       onChange={(e) => setPixelzParams((p) => ({ ...p, width: Number(e.target.value) || 7 }))}
-                      style={{ width: 50, padding: "0.25rem" }}
+                      className="input input--inline"
+                      style={{ width: 60 }}
                     />
                   </label>
-                  <label style={{ fontSize: "0.9rem" }}>
-                    Height:{" "}
+                  <label className="text-sm">
+                    Height{" "}
                     <input
                       type="number"
                       min={1}
                       max={30}
                       value={pixelzParams.height}
                       onChange={(e) => setPixelzParams((p) => ({ ...p, height: Number(e.target.value) || 10 }))}
-                      style={{ width: 50, padding: "0.25rem" }}
+                      className="input input--inline"
+                      style={{ width: 60 }}
                     />
                   </label>
-                  <label style={{ fontSize: "0.9rem" }}>
-                    Colors:{" "}
+                  <label className="text-sm">
+                    Colors{" "}
                     <input
                       type="number"
                       min={2}
                       max={10}
                       value={pixelzParams.numColors}
                       onChange={(e) => setPixelzParams((p) => ({ ...p, numColors: Number(e.target.value) || 5 }))}
-                      style={{ width: 50, padding: "0.25rem" }}
+                      className="input input--inline"
+                      style={{ width: 60 }}
                     />
                   </label>
                   <button
                     type="button"
                     onClick={handleNewPixelzBoard}
                     disabled={pixelzCreating}
-                    style={{ padding: "0.5rem 1rem", background: "#fff", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer" }}
+                    className="btn"
                   >
-                    {pixelzCreating ? "Creating…" : "New board — Generate & Play"}
+                    {pixelzCreating ? "Creating…" : "Generate & Play"}
                   </button>
                 </div>
               </div>
             )}
-            <div style={{ marginTop: "1rem" }}>
-              <p style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: 600 }}>Boards I've played:</p>
+            <div className="mt-md">
+              <p className="font-semibold text-sm mb-sm">Boards I've played:</p>
               {myBoardsLoading || hasSession === null ? (
-                <p style={{ color: "#666", fontSize: "0.9rem" }}>Loading…</p>
+                <p className="loading-text text-sm">Loading…</p>
               ) : myBoardIds.length > 0 ? (
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <ul className="board-list">
                   {myBoardIds.map((boardId) => (
-                    <li key={boardId} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", background: "#fafafa", padding: "0.5rem", border: "1px solid #eee", borderRadius: 6 }}>
+                    <li key={boardId} className="board-item">
                       <Link
                         to={`/play?game=pixelz&level=${encodeURIComponent(boardId)}`}
-                        style={{ padding: "0.35rem 0.6rem", background: "#e8f5e9", borderRadius: 4, fontSize: "0.9rem", textDecoration: "none", color: "#1b5e20", border: "1px solid #c8e6c9" }}
+                        className="btn btn-sm btn-success"
                       >
                         Play
                       </Link>
                       <button
                         type="button"
                         onClick={() => copyBoardLink(boardId)}
-                        style={{ padding: "0.35rem 0.6rem", background: "#e3f2fd", borderRadius: 4, fontSize: "0.9rem", cursor: "pointer", border: "1px solid #bbdefb", color: "#0d47a1" }}
+                        className="btn btn-sm"
                       >
                         {copiedId === boardId ? "Copied!" : "Copy link"}
                       </button>
-                      <span style={{ fontSize: "0.85rem", color: "#666", wordBreak: "break-all" }}>
+                      <span className="board-item-id">
                         {boardId}
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : hasSession === true ? (
-                <p style={{ color: "#666", fontSize: "0.9rem" }}>No boards yet. Play a board to see it here.</p>
+                <p className="text-muted">No boards yet. Play a board to see it here.</p>
               ) : (
-                <p style={{ color: "#666", fontSize: "0.9rem" }}>Sign in and play to see your boards here.</p>
+                <p className="text-muted">Sign in and play to see your boards here.</p>
               )}
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div className="btn-group">
             {selectedGame.levelIds.map((id) => (
               <Link
                 key={id}
                 to={`/play?game=${selectedGame.id}&level=${id}`}
-                style={{ padding: "0.5rem 1rem", background: "#eee", borderRadius: 4, textDecoration: "none", color: "#333", border: "1px solid #ddd" }}
+                className="btn btn-sm"
               >
                 {REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS] != null
                   ? `${REFLEX_LEVELS[id as keyof typeof REFLEX_LEVELS]} rounds`
@@ -254,16 +250,17 @@ export default function Configure() {
       </section>
 
       {/* ── 1:1 Challenge ── */}
-      <section>
-        <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.75rem" }}>1:1 Challenge</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      <section className="config-section">
+        <h3 className="section-title">1:1 Challenge</h3>
+        <div className="config-row">
           {selectedGame?.id === "reflex" && (
-            <label style={{ fontSize: "0.9rem" }}>
+            <label className="text-sm">
               Level:{" "}
               <select
                 value={inviteReflexLevel}
                 onChange={(e) => setInviteReflexLevel(e.target.value)}
-                style={{ marginLeft: "0.25rem" }}
+                className="input input--inline"
+                style={{ width: 140 }}
               >
                 {selectedGame.levelIds.map((id) => (
                   <option key={id} value={id}>
@@ -277,11 +274,11 @@ export default function Configure() {
             type="button"
             onClick={handleCreateInvite}
             disabled={inviteCreating}
-            style={{ padding: "0.5rem 0.9rem", background: "#e8f5e9", borderRadius: 4, cursor: "pointer", border: "1px solid #c8e6c9" }}
+            className="btn btn-primary"
           >
             {inviteCreating ? "Creating invite…" : "Create invite"}
           </button>
-          {inviteError && <span style={{ color: "#c00", fontSize: "0.9rem" }}>{inviteError}</span>}
+          {inviteError && <span className="text-error text-sm">{inviteError}</span>}
         </div>
       </section>
     </div>
