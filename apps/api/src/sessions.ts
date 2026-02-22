@@ -473,7 +473,7 @@ export async function handleFinishSession(c: Context): Promise<Response> {
       from public.game_session_players p
       left join public.app_users u on u.id = p.user_id
       where p.session_id = ${sessionId}::uuid
-      for update
+      for update of p
     `;
     const playerRows = players as unknown as SessionPlayerRow[];
     const allFinished = playerRows.every((p) => p.status === "finished");

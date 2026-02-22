@@ -207,7 +207,11 @@ async function postSessionAction(sessionId: string, action: "ready" | "begin" | 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? `Failed to ${action} session`);
+    const msg =
+      (err as { error?: string; details?: string }).error ??
+      (err as { details?: string }).details ??
+      `Failed to ${action} session`;
+    throw new Error(msg);
   }
 }
 
@@ -235,7 +239,11 @@ export async function finishSession(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? "Failed to finish session");
+    const msg =
+      (err as { error?: string; details?: string }).error ??
+      (err as { details?: string }).details ??
+      "Failed to finish session";
+    throw new Error(msg);
   }
 }
 

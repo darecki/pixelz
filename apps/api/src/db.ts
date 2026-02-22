@@ -13,6 +13,9 @@ export const sql = postgres(connectionString, {
   max: poolMax,
   idle_timeout: 20,
   connect_timeout: 10,
+  // Supabase pooler (transaction mode) can drop prepared statements between requests.
+  // Disabling client-side prepared statements avoids intermittent "does not exist" errors.
+  prepare: false,
   ssl: connectionString.includes("supabase") ? "require" : false,
 });
 
