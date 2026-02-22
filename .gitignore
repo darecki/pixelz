@@ -48,6 +48,7 @@ coverage/
 .nyc_output/
 *.lcov
 .jest/
+playwright-report/
 
 # Vercel
 .vercel
