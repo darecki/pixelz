@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { appendEvent } from "../lib/eventLog";
 import { performSync } from "../lib/sync";
+
+type PendingScore = {
+  levelId: string;
+  moves: number;
+  timeMs: number;
+  score?: number;
+  moveSequence?: number[];
+};
 
 type Mode = "signin" | "signup";
 
@@ -33,10 +42,21 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         
-        const pendingScore = sessionStorage.getItem("pixelz_pending_score");
-        if (pendingScore) {
+        const pendingScoreStr = sessionStorage.getItem("pixelz_pending_score");
+        if (pendingScoreStr) {
           sessionStorage.removeItem("pixelz_pending_score");
           try {
+            const pending = JSON.parse(pendingScoreStr) as PendingScore;
+            appendEvent({
+              type: "LEVEL_COMPLETED",
+              payload: {
+                levelId: pending.levelId,
+                score: pending.score ?? 0,
+                moves: pending.moves,
+                timeMs: pending.timeMs,
+                moveSequence: pending.moveSequence,
+              },
+            });
             await performSync();
           } catch {}
         }

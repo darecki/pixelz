@@ -71,6 +71,7 @@ export default function PixelzGame({ levelId }: { levelId: string }) {
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
 
   useEffect(() => {
+    sessionStorage.removeItem("pixelz_pending_score");
     let cancelled = false;
     scoreSubmittedRef.current = false;
     setLoading(true);

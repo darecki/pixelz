@@ -20,7 +20,8 @@ export async function performSync(): Promise<SyncResult | null> {
 
   if (session?.access_token) {
     const result = await syncEvents(session.access_token, pendingEvents);
-    await removeFirstEvents(result.acceptedCount);
+    const totalProcessed = result.acceptedCount + result.rejectedCount;
+    await removeFirstEvents(totalProcessed);
     return {
       accepted: result.acceptedCount,
       rejected: result.rejectedCount,
@@ -42,8 +43,11 @@ export async function performSync(): Promise<SyncResult | null> {
     : pendingEvents;
 
   const result = await syncEventsAnon(anonId, eventsToSend);
-  const acceptedFromQueue = didPrependNickname ? Math.min(pendingEvents.length, result.acceptedCount - 1) : result.acceptedCount;
-  await removeFirstEvents(acceptedFromQueue);
+  const totalProcessed = result.acceptedCount + result.rejectedCount;
+  const toRemoveFromQueue = didPrependNickname
+    ? Math.min(pendingEvents.length, totalProcessed - 1)
+    : totalProcessed;
+  await removeFirstEvents(toRemoveFromQueue);
   return {
     accepted: result.acceptedCount,
     rejected: result.rejectedCount,

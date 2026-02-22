@@ -45,6 +45,7 @@ export default function ReflexGame({ levelId }: { levelId: string }) {
   const pickTargetColor = useCallback(() => REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)], []);
 
   useEffect(() => {
+    sessionStorage.removeItem("pixelz_pending_score");
     scoreSubmittedRef.current = false;
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
