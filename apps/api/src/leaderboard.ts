@@ -55,35 +55,40 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
   const lowerIsBetter = levelId.startsWith("reflex_") || isPixelzBoardId(levelId);
 
   try {
-    const raw = await (lowerIsBetter
+    const queryPromise = lowerIsBetter
       ? sql`
-        select
-          s.score,
-          s.moves,
-          s.time_ms,
-          to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-          u.id as user_id,
-          coalesce(s.nickname, u.nickname) as nickname
-        from public.scores s
-        join public.app_users u on u.id = s.user_id
-        where s.level_id = ${levelId}
-        order by s.score asc, s.time_ms asc
-        limit ${GAME.LEADERBOARD_TOP_N}
-      `
+          select
+            s.score,
+            s.moves,
+            s.time_ms,
+            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
+            u.id as user_id,
+            coalesce(s.nickname, u.nickname) as nickname
+          from public.scores s
+          join public.app_users u on u.id = s.user_id
+          where s.level_id = ${levelId}
+          order by s.score asc, s.time_ms asc
+          limit ${GAME.LEADERBOARD_TOP_N}
+        `
       : sql`
-        select
-          s.score,
-          s.moves,
-          s.time_ms,
-          to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-          u.id as user_id,
-          coalesce(s.nickname, u.nickname) as nickname
-        from public.scores s
-        join public.app_users u on u.id = s.user_id
-        where s.level_id = ${levelId}
-        order by s.score desc, s.time_ms asc
-        limit ${GAME.LEADERBOARD_TOP_N}
-      `);
+          select
+            s.score,
+            s.moves,
+            s.time_ms,
+            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
+            u.id as user_id,
+            coalesce(s.nickname, u.nickname) as nickname
+          from public.scores s
+          join public.app_users u on u.id = s.user_id
+          where s.level_id = ${levelId}
+          order by s.score desc, s.time_ms asc
+          limit ${GAME.LEADERBOARD_TOP_N}
+        `;
+
+    const raw = await Promise.race([
+      queryPromise,
+      timeout(LEADERBOARD_HANDLER_TIMEOUT_MS),
+    ]);
     const rows: LeaderboardRow[] = raw as unknown as LeaderboardRow[];
 
     const entries = rows.map((row: LeaderboardRow, index: number) => ({

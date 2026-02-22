@@ -51,7 +51,7 @@ export const createSessionSchema = z.union([
 export const finishSessionSchema = z.object({
   moves: z.number().int().min(0),
   timeMs: z.number().int().min(0),
-  moveSequence: z.array(z.number().int().min(0)).optional(),
+  moveSequence: z.array(z.number().int().min(0).max(9)).optional(),
 });
 
 export const SESSION = {

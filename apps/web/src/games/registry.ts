@@ -3,12 +3,18 @@ import { lazy } from "react";
 
 export type GameLevelType = "predefined" | "random" | "none" | "board";
 
+export type BaseSessionGameProps = {
+  seed: string;
+  onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
+  onProgress?: (progress: { moves: number; timeMs: number }) => void;
+};
+
 export type GameDef = {
   id: string;
   name: string;
   levelType: GameLevelType;
   levelIds: readonly string[];
-  component: React.LazyExoticComponent<React.ComponentType<{ levelId: string; sessionProps?: any }>>;
+  component: React.LazyExoticComponent<React.ComponentType<{ levelId: string; sessionProps?: BaseSessionGameProps }>>;
 };
 
 export const GAMES: GameDef[] = [
