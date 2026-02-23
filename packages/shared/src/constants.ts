@@ -76,8 +76,9 @@ export function isPredefinedPixelzLevel(levelId: string): levelId is PixelzLevel
 }
 
 /**
- * Pixelz score: each millisecond = 1 point, each move = 10k points. Lower is better.
+ * Pixelz score is now obsolete. Ranking strictly uses moves and timeMs directly.
+ * We return 0 to satisfy the DB schema (score >= 0).
  */
 export function computePixelzScore(moves: number, timeMs: number): number {
-  return timeMs + moves * PIXELZ_SCORE_MOVE_PENALTY;
+  return 0;
 }

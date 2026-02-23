@@ -52,12 +52,46 @@ export default function Configure() {
     };
   }, []);
 
-  async function handleNewPixelzBoard() {
+  async function handleNewPixelzBoard(is1v1: boolean) {
     setPixelzCreating(true);
+    setInviteError(null);
     try {
-      const board = await createBoard(pixelzParams);
-      navigate(`/play?game=pixelz&level=${encodeURIComponent(board.boardId)}`);
-    } catch {
+      if (is1v1) {
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Auth session lookup timed out. Please refresh and try again.")), 8000);
+          }),
+        ]);
+        const { data: { session } } = sessionResult;
+        if (!session?.access_token) {
+          setInviteError("Sign in to create a 1:1 invite.");
+          setPixelzCreating(false);
+          return;
+        }
+        const created = await createSession({
+          game: "pixelz",
+          mode: "generated",
+          settings: pixelzParams,
+        }, session.access_token);
+        
+        const inviteUrl = typeof window !== "undefined"
+            ? `${window.location.origin}/join/${encodeURIComponent(created.inviteCode)}`
+            : `/join/${encodeURIComponent(created.inviteCode)}`;
+        void Promise.race([
+          navigator.clipboard.writeText(inviteUrl),
+          new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+        ]).catch(() => undefined);
+        navigate(`/session/${encodeURIComponent(created.sessionId)}`);
+      } else {
+        const board = await createBoard(pixelzParams);
+        navigate(`/play?game=pixelz&level=${encodeURIComponent(board.boardId)}`);
+      }
+    } catch (err) {
+      if (is1v1) {
+        setInviteError(err instanceof Error ? err.message : "Failed to create invite");
+      }
+    } finally {
       setPixelzCreating(false);
     }
   }
@@ -194,14 +228,25 @@ export default function Configure() {
                       style={{ width: 60 }}
                     />
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleNewPixelzBoard}
-                    disabled={pixelzCreating}
-                    className="btn"
-                  >
-                    {pixelzCreating ? "Creating…" : "Generate & Play"}
-                  </button>
+                  <div className="flex gap-sm mt-sm">
+                    <button
+                      type="button"
+                      onClick={() => handleNewPixelzBoard(false)}
+                      disabled={pixelzCreating}
+                      className="btn"
+                    >
+                      {pixelzCreating ? "Creating…" : "Generate & Play"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNewPixelzBoard(true)}
+                      disabled={pixelzCreating}
+                      className="btn btn-primary"
+                    >
+                      {pixelzCreating ? "Creating…" : "Generate & Create 1:1 Invite"}
+                    </button>
+                    {inviteError && <span className="text-error text-sm">{inviteError}</span>}
+                  </div>
                 </div>
               </div>
             )}

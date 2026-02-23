@@ -158,7 +158,7 @@ export default function Leaderboard() {
   if (error) return <div className="page-container"><p className="text-error">{error}</p></div>;
   if (!data) return null;
 
-  const colSpan = isPixelz ? 6 : 4;
+  const colSpan = isPixelz ? 5 : 4;
 
   return (
     <div className="page-container page-container--wide">
@@ -250,15 +250,32 @@ export default function Leaderboard() {
                 )}
               </div>
             ) : null}
-            {isPixelz && (
-              <Link
-                to={`/play?game=pixelz&level=${encodeURIComponent(effectiveLevel)}`}
-                className="btn btn-sm btn-primary"
-                style={{ marginLeft: "auto" }}
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href).catch(() => {});
+                  const btn = document.getElementById("share-leaderboard-btn");
+                  if (btn) {
+                    const original = btn.innerText;
+                    btn.innerText = "Copied!";
+                    setTimeout(() => { btn.innerText = original; }, 2000);
+                  }
+                }}
+                id="share-leaderboard-btn"
+                className="btn btn-sm"
               >
-                Play this board
-              </Link>
-            )}
+                Share link
+              </button>
+              {isPixelz && (
+                <Link
+                  to={`/play?game=pixelz&level=${encodeURIComponent(effectiveLevel)}`}
+                  className="btn btn-sm btn-primary"
+                >
+                  Play this board
+                </Link>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -270,10 +287,7 @@ export default function Leaderboard() {
               <th>Rank</th>
               <th>User</th>
               {isPixelz && (
-                <>
-                  <th className="text-right">Score</th>
-                  <th className="text-right">Moves</th>
-                </>
+                <th className="text-right">Moves</th>
               )}
               <th className="text-right">Time (s)</th>
               <th>When</th>
@@ -298,10 +312,7 @@ export default function Leaderboard() {
                     <td>{e.rank}</td>
                     <td>{displayUser(e)}</td>
                     {isPixelz && (
-                      <>
-                        <td className="text-right">{e.score.toLocaleString()}</td>
-                        <td className="text-right">{e.moves}</td>
-                      </>
+                      <td className="text-right">{e.moves}</td>
                     )}
                     <td className="text-right">
                       {(e.timeMs / 1000).toFixed(2)}

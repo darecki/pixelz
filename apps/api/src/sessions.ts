@@ -62,8 +62,8 @@ function resolveWinner(game: "pixelz" | "reflex", players: SessionPlayerRow[]): 
   if (players.length === 0) return null;
   const sorted = [...players].sort((a, b) => {
     if (game === "pixelz") {
-      const scoreDelta = (a.score ?? Number.MAX_SAFE_INTEGER) - (b.score ?? Number.MAX_SAFE_INTEGER);
-      if (scoreDelta !== 0) return scoreDelta;
+      const movesDelta = (a.moves ?? Number.MAX_SAFE_INTEGER) - (b.moves ?? Number.MAX_SAFE_INTEGER);
+      if (movesDelta !== 0) return movesDelta;
       return (a.time_ms ?? Number.MAX_SAFE_INTEGER) - (b.time_ms ?? Number.MAX_SAFE_INTEGER);
     }
     return (a.time_ms ?? Number.MAX_SAFE_INTEGER) - (b.time_ms ?? Number.MAX_SAFE_INTEGER);
@@ -73,7 +73,7 @@ function resolveWinner(game: "pixelz" | "reflex", players: SessionPlayerRow[]): 
   const second = sorted[1];
   const tie =
     game === "pixelz"
-      ? first.score === second.score && first.time_ms === second.time_ms
+      ? (first.moves === second.moves && first.time_ms === second.time_ms)
       : first.time_ms === second.time_ms;
   return tie ? null : first.user_id;
 }
