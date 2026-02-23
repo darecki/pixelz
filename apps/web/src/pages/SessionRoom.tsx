@@ -6,6 +6,7 @@ import {
   createSession,
   fetchSession,
   finishSession,
+  joinSession,
   leaveSession,
   markSessionReady,
   type SessionResponse,
@@ -37,9 +38,19 @@ export default function SessionRoom() {
     const next = await fetchSession(sessionId);
     setData(next);
   }, [sessionId]);
-  const handleHint = useCallback(() => {
-    refresh().catch(() => {});
-  }, [refresh]);
+  const handleHint = useCallback(async (event?: string, payload?: Record<string, unknown>) => {
+    if (event === "next_game_created" && payload?.nextSessionId) {
+      const nextId = payload.nextSessionId as string;
+      try {
+        await joinSession(nextId);
+        navigate(`/session/${encodeURIComponent(nextId)}`);
+      } catch (err) {
+        console.error("Auto-join failed:", err);
+      }
+    } else {
+      refresh().catch(() => {});
+    }
+  }, [refresh, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +187,7 @@ export default function SessionRoom() {
           },
         });
       }
+      await broadcast("next_game_created", { nextSessionId: created.sessionId });
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create next session");
@@ -289,10 +301,10 @@ export default function SessionRoom() {
             <button
               type="button"
               onClick={handleReady}
-              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished"}
+              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished" || data.players.length < data.session.maxPlayers}
               className="btn btn-primary"
             >
-              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : "Ready"}
+              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : data.players.length < data.session.maxPlayers ? "Waiting for players…" : "Ready"}
             </button>
             <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
               Leave

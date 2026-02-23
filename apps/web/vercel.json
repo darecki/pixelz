@@ -2,5 +2,11 @@
   "framework": "vite",
   "buildCommand": "cd ../.. && pnpm --filter \"web...\" run build",
   "installCommand": "cd ../.. && pnpm install",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

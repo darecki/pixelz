@@ -263,6 +263,21 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
           </button>
           <button
             type="button"
+            onClick={(e) => {
+              const url = typeof window !== "undefined" ? `${window.location.origin}/play?game=pixelz&level=${encodeURIComponent(levelId)}` : "";
+              navigator.clipboard.writeText(url).catch(() => {});
+              const btn = e.currentTarget;
+              const original = btn.innerText;
+              btn.innerText = "Copied!";
+              setTimeout(() => { btn.innerText = original; }, 2000);
+            }}
+            className="btn"
+            disabled={saving}
+          >
+            Challenge a friend
+          </button>
+          <button
+            type="button"
             onClick={() => window.location.reload()}
             className="btn"
             disabled={saving}

@@ -87,7 +87,7 @@ export function computeSessionScore(game: "pixelz" | "reflex", moves: number, ti
 }
 
 export function comparePixelzResults(a: PlayerResult, b: PlayerResult): number {
-  if (a.score !== b.score) return a.score - b.score;
+  if (a.moves !== b.moves) return a.moves - b.moves;
   return a.timeMs - b.timeMs;
 }
 

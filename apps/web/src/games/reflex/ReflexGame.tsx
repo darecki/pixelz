@@ -323,6 +323,21 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
           >
             View leaderboard
           </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              const url = typeof window !== "undefined" ? `${window.location.origin}/play?game=reflex&level=${encodeURIComponent(levelId)}` : "";
+              navigator.clipboard.writeText(url).catch(() => {});
+              const btn = e.currentTarget;
+              const original = btn.innerText;
+              btn.innerText = "Copied!";
+              setTimeout(() => { btn.innerText = original; }, 2000);
+            }}
+            className="btn"
+            disabled={phase === "saving"}
+          >
+            Challenge a friend
+          </button>
           <button type="button" onClick={startGame} className="btn" disabled={phase === "saving"}>
             Play again
           </button>

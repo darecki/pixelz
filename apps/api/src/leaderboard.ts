@@ -81,7 +81,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
           from public.scores s
           join public.app_users u on u.id = s.user_id
           where s.level_id = ${levelId}
-          order by s.score desc, s.time_ms asc
+          order by s.moves asc, s.time_ms asc
           limit ${GAME.LEADERBOARD_TOP_N}
         `;
 
