@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 
 type ProgressPayload = { userId?: string; moves: number; timeMs: number };
 
-export function useGameSession(sessionId: string | null, selfUserId: string | null, onHint: () => void) {
+export function useGameSession(sessionId: string | null, selfUserId: string | null, onHint: (event?: string, payload?: Record<string, unknown>) => void) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [progressByUser, setProgressByUser] = useState<Record<string, { moves: number; timeMs: number }>>({});
   const [onlineIds, setOnlineIds] = useState<string[]>([]);
@@ -19,8 +19,8 @@ export function useGameSession(sessionId: string | null, selfUserId: string | nu
         if (!p.userId || typeof p.moves !== "number" || typeof p.timeMs !== "number") return;
         setProgressByUser((prev) => ({ ...prev, [p.userId!]: { moves: p.moves, timeMs: p.timeMs } }));
       })
-      .on("broadcast", { event: "*" }, ({ event }) => {
-        if (event !== "progress_update") onHint();
+      .on("broadcast", { event: "*" }, ({ event, payload }) => {
+        if (event !== "progress_update") onHint(event, payload);
       })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ userId?: string }>();
