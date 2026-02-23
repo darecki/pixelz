@@ -88,9 +88,8 @@ export default function Configure() {
         navigate(`/play?game=pixelz&level=${encodeURIComponent(board.boardId)}`);
       }
     } catch (err) {
-      if (is1v1) {
-        setInviteError(err instanceof Error ? err.message : "Failed to create invite");
-      }
+      const fallbackMessage = is1v1 ? "Failed to create invite" : "Failed to create board";
+      setInviteError(err instanceof Error ? err.message : fallbackMessage);
     } finally {
       setPixelzCreating(false);
     }
