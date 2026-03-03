@@ -53,12 +53,8 @@ export default function Leaderboard() {
   const justFinished = searchParams.get("justFinished") === "1";
   const isPixelz = game === "pixelz";
 
-  const [pixelzBoardInput, setPixelzBoardInput] = useState("");
   const [myBoardIds, setMyBoardIds] = useState<string[]>([]);
   const [myBoardsLoading, setMyBoardsLoading] = useState(false);
-  useEffect(() => {
-    if (isPixelzBoardId(effectiveLevel)) setPixelzBoardInput(effectiveLevel);
-  }, [effectiveLevel]);
   useEffect(() => {
     if (game !== "pixelz") return;
     let cancelled = false;
@@ -159,6 +155,9 @@ export default function Leaderboard() {
   if (!data) return null;
 
   const colSpan = isPixelz ? 5 : 4;
+  const customBoardIds = myBoardIds.filter(id => !isPredefinedPixelzLevel(id));
+  const isCustomEffective = isPixelz && !isPredefinedPixelzLevel(effectiveLevel);
+  const showCustomSelect = isPixelz && (customBoardIds.length > 0 || isCustomEffective);
 
   return (
     <div className="page-container page-container--wide">
@@ -211,44 +210,27 @@ export default function Leaderboard() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-sm items-center">
-              <input
-                type="text"
-                value={pixelzBoardInput}
-                onChange={(e) => setPixelzBoardInput(e.target.value)}
-                placeholder="Board ID (pixelz_...)"
-                className="input input--inline"
-                style={{ width: 200 }}
-              />
-              <button
-                type="button"
-                onClick={() => pixelzBoardInput.trim() && setLevel(pixelzBoardInput.trim())}
-                className="btn btn-sm"
-              >
-                Go
-              </button>
-            </div>
             {myBoardsLoading ? (
-              <span className="text-muted text-sm">Loading my boards…</span>
-            ) : myBoardIds.length > 0 ? (
-              <div className="flex flex-wrap gap-sm items-center">
-                <span className="text-muted text-sm">My boards:</span>
-                {myBoardIds.slice(0, 8).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setLevel(id)}
-                    className={`btn-toggle ${effectiveLevel === id ? "btn-toggle--active" : ""}`}
-                    title={id}
-                    style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
-                    {isPredefinedPixelzLevel(id) ? PIXELZ_LEVELS[id] : id.slice(0, 12) + "…"}
-                  </button>
-                ))}
-                {myBoardIds.length > 8 && (
-                  <span className="text-muted text-xs">+{myBoardIds.length - 8} more</span>
+              <span className="text-muted text-sm ml-sm">Loading custom boards…</span>
+            ) : showCustomSelect ? (
+              <select
+                value={isCustomEffective ? effectiveLevel : ""}
+                onChange={(e) => {
+                  if (e.target.value) setLevel(e.target.value);
+                }}
+                className="input input--inline"
+                style={{ width: "auto", minWidth: 200 }}
+              >
+                {!isCustomEffective && <option value="" disabled>My custom boards…</option>}
+                {isCustomEffective && !customBoardIds.includes(effectiveLevel) && (
+                  <option value={effectiveLevel}>{effectiveLevel.slice(0, 20) + '...'}</option>
                 )}
-              </div>
+                {customBoardIds.map((id) => (
+                  <option key={id} value={id}>
+                    {id.slice(0, 20) + '...'}
+                  </option>
+                ))}
+              </select>
             ) : null}
             <div style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}>
               <button

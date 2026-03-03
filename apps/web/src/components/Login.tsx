@@ -23,21 +23,26 @@ export default function Login() {
   const [nickname, setNickname] = useState("");
   const [mode, setMode] = useState<Mode>("signin");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setMessage(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { nickname: nickname.trim() || undefined } },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { nickname: nickname.trim() || undefined }
+          },
         });
         if (error) throw error;
-        setMessage("Check your email to confirm, or sign in.");
+        setSuccessMsg("Check your email to confirm, or sign in.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -64,7 +69,7 @@ export default function Login() {
         navigate(redirect);
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Auth failed");
+      setErrorMsg(err instanceof Error ? err.message : "Auth failed");
     } finally {
       setLoading(false);
     }
@@ -112,7 +117,8 @@ export default function Login() {
               className="input"
             />
           </div>
-          {message && <p className="text-error text-sm mb-md">{message}</p>}
+          {errorMsg && <p className="text-error text-sm mb-md">{errorMsg}</p>}
+          {successMsg && <p className="text-success text-sm mb-md" style={{ color: "var(--color-success, #10b981)" }}>{successMsg}</p>}
           <div className="flex gap-sm">
             <button type="submit" disabled={loading} className="btn btn-primary w-full">
               {loading ? "..." : mode === "signin" ? "Sign in" : "Sign up"}

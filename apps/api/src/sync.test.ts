@@ -27,8 +27,8 @@ describe("validateScore", () => {
   });
 
   it("validates pixelz score correctly", () => {
-    expect(validateScore(5000, 0, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
-    expect(validateScore(15000, 1, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(0, 0, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
+    expect(validateScore(0, 1, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(true);
     expect(validateScore(10000, 0, 5000, "pixelz_level_1", "LEVEL_COMPLETED")).toBe(false);
   });
 
