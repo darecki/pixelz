@@ -52,10 +52,10 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
     throw err;
   }
 
-  const lowerIsBetter = levelId.startsWith("reflex_") || isPixelzBoardId(levelId);
+  const isReflex = levelId.startsWith("reflex_");
 
   try {
-    const queryPromise = lowerIsBetter
+    const queryPromise = isReflex
       ? sql`
           select
             s.score,

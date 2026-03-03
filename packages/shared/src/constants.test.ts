@@ -30,11 +30,11 @@ describe("computeScore", () => {
 });
 
 describe("computePixelzScore", () => {
-  it("combines time and moves with penalty", () => {
+  it("always returns 0 as score is no longer computed", () => {
     expect(computePixelzScore(0, 0)).toBe(0);
-    expect(computePixelzScore(1, 0)).toBe(10_000);
-    expect(computePixelzScore(0, 100)).toBe(100);
-    expect(computePixelzScore(2, 50)).toBe(20_050);
+    expect(computePixelzScore(1, 0)).toBe(0);
+    expect(computePixelzScore(0, 100)).toBe(0);
+    expect(computePixelzScore(2, 50)).toBe(0);
   });
 });
 
