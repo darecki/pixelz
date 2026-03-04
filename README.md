@@ -1,6 +1,15 @@
 # Pixelz
 
-Offline-first puzzle game (MVP: web + Vercel API + Supabase).
+Offline-first puzzle game - a demonstration of a modern web stack featuring a custom-built sleek UI design system. Built with React (Vite), Hono (Vercel API), and Supabase.
+
+## Screenshots
+
+<div align="center">
+  <img src="./screenshots/homepage-dark.png" width="48%" />
+  <img src="./screenshots/gameplay-pixelz.png" width="48%" />
+  <img src="./screenshots/gameplay-reflex.png" width="48%" />
+  <img src="./screenshots/leaderboard.png" width="48%" />
+</div>
 
 ## Setup
 
@@ -80,7 +89,7 @@ Run the initial migration in Supabase SQL Editor (Dashboard → SQL Editor → N
      curl -X POST http://localhost:3000/sync \
        -H "Authorization: Bearer TOKEN" \
        -H "Content-Type: application/json" \
-       -d '{"events":[{"type":"LEVEL_COMPLETED","payload":{"levelId":"level_1","score":1000,"moves":10,"timeMs":5000}}]}'
+       -d '{"events":[{"type":"LEVEL_COMPLETED","payload":{"levelId":"level_1","moves":10,"timeMs":5000}}]}'
      ```
      Expected: `{"acceptedCount":1,"rejectedCount":0}`. Then:
      ```bash
@@ -129,9 +138,3 @@ Connect this repo to Vercel so that **pushes to `main` (and optionally PRs) trig
 - Run the DB migrations in Supabase if not already done.
 - Create a user in Supabase Auth and use the web app to sign in, play, sync, and view leaderboards.
 
-## Next steps (implementation plan)
-
-- ~~**Phase 3:**~~ Done (web shell, auth, IndexedDB, sync, leaderboard, PWA).
-- ~~**Phase 4**~~ Done (deterministic scoring, Play page, levels + random seed, event emission).
-- ~~**Phase 5:**~~ Done (sync and leaderboards end-to-end: in-game "Sync and view leaderboard", leaderboard ?level= URL, background sync after level complete).
-- ~~**Phase 6:**~~ Done (CI/CD: Vercel deploy, GitHub Actions lint/build, README deploy + polish).
