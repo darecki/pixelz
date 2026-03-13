@@ -33,18 +33,21 @@ export const createSessionSchema = z.union([
     mode: z.literal("predefined"),
     levelId: pixelzLevelIdSchema,
     settings: z.undefined().optional(),
+    maxPlayers: z.number().int().min(2).max(10).optional(),
   }),
   z.object({
     game: z.literal("pixelz"),
     mode: z.literal("generated"),
     levelId: z.undefined().optional(),
     settings: pixelzSessionSettingsSchema,
+    maxPlayers: z.number().int().min(2).max(10).optional(),
   }),
   z.object({
     game: z.literal("reflex"),
     mode: z.literal("predefined"),
     levelId: reflexLevelIdSchema,
     settings: z.undefined().optional(),
+    maxPlayers: z.number().int().min(2).max(10).optional(),
   }),
 ]);
 

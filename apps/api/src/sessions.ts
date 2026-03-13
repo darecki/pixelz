@@ -148,6 +148,7 @@ export async function handleCreateSession(c: Context): Promise<Response> {
 
   const payload = parsed.data;
   const game = payload.game;
+  const maxPlayers = "maxPlayers" in payload && typeof payload.maxPlayers === "number" ? payload.maxPlayers : 2;
   const seed = crypto.randomUUID();
   let levelId: string | null =
     "levelId" in payload && typeof payload.levelId === "string" ? payload.levelId : null;
@@ -178,7 +179,7 @@ export async function handleCreateSession(c: Context): Promise<Response> {
         }
         const inserted = await tx`
           insert into public.game_sessions (game, invite_code, level_id, seed, settings, status, max_players)
-          values (${game}, ${inviteCode}, ${levelId}, ${seed}, ${settings}, 'waiting', 2)
+          values (${game}, ${inviteCode}, ${levelId}, ${seed}, ${settings}, 'waiting', ${maxPlayers})
           returning id
         `;
         const sessionId = String(inserted[0].id);

@@ -65,9 +65,9 @@ export type SessionResponse = {
 };
 
 export type CreateSessionRequest =
-  | { game: "pixelz"; mode: "predefined"; levelId: string }
-  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number } }
-  | { game: "reflex"; mode: "predefined"; levelId: string };
+  | { game: "pixelz"; mode: "predefined"; levelId: string; maxPlayers?: number }
+  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number }; maxPlayers?: number }
+  | { game: "reflex"; mode: "predefined"; levelId: string; maxPlayers?: number };
 
 export type CreateSessionResponse = { sessionId: string; inviteCode: string };
 

@@ -169,12 +169,14 @@ export default function SessionRoom() {
           game: "reflex",
           mode: "predefined",
           levelId: data.session.levelId,
+          maxPlayers: data.session.maxPlayers,
         });
       } else if (data.session.levelId?.startsWith("pixelz_level_")) {
         created = await createSession({
           game: "pixelz",
           mode: "predefined",
           levelId: data.session.levelId,
+          maxPlayers: data.session.maxPlayers,
         });
       } else {
         created = await createSession({
@@ -185,6 +187,7 @@ export default function SessionRoom() {
             height: Number((data.session.settings?.height as number | undefined) ?? 10),
             numColors: Number((data.session.settings?.numColors as number | undefined) ?? 5),
           },
+          maxPlayers: data.session.maxPlayers,
         });
       }
       await broadcast("next_game_created", { nextSessionId: created.sessionId });
@@ -204,8 +207,7 @@ export default function SessionRoom() {
   const GameComponent = game?.component;
   const selfUserId = data.currentUserId;
   const me = data.players.find((p) => p.userId === selfUserId) ?? null;
-  const opponent = data.players.find((p) => p.userId !== selfUserId) ?? null;
-  const opponentProgress = opponent ? progressByUser[opponent.userId] : null;
+  const opponents = data.players.filter((p) => p.userId !== selfUserId);
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
     const canCreateNextSession = me?.role === "host";
@@ -321,12 +323,19 @@ export default function SessionRoom() {
 
   return (
     <div>
-      {opponent && (
-        <div className="opponent-bar">
-          Opponent: <strong>{opponent.nickname ?? opponent.userId}</strong>
-          {opponentProgress
-            ? ` · ${opponentProgress.moves} moves · ${(opponentProgress.timeMs / 1000).toFixed(1)}s`
-            : " · no progress yet"}
+      {opponents.length > 0 && (
+        <div className="flex flex-col gap-sm mb-md opponents-container">
+          {opponents.map((opp) => {
+            const prog = progressByUser[opp.userId];
+            return (
+              <div key={opp.userId} className="opponent-bar">
+                <strong>{opp.nickname ?? opp.userId}</strong>
+                {prog
+                  ? ` · ${prog.moves} moves · ${(prog.timeMs / 1000).toFixed(1)}s`
+                  : " · no progress yet"}
+              </div>
+            );
+          })}
         </div>
       )}
       <Suspense fallback={<div className="page-container"><p className="loading-text">Loading game…</p></div>}>
