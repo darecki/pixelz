@@ -211,14 +211,26 @@ export default function SessionRoom() {
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
     const canCreateNextSession = me?.role === "host";
+    const sortedPlayers = [...data.players].sort((a, b) => {
+      if (a.placement != null && b.placement != null) return a.placement - b.placement;
+      if (a.placement != null) return -1;
+      if (b.placement != null) return 1;
+      return 0; // fallback if neither has placement
+    });
+
     return (
       <div className="page-container">
         <div className="card">
           <h2 className="mb-md">Session Results</h2>
           <p className="text-secondary mb-sm">Status: <span className="badge">{data.session.status}</span></p>
           <ul className="lobby-players">
-            {data.players.map((p) => (
+            {sortedPlayers.map((p) => (
               <li key={p.userId} className="lobby-player">
+                {p.placement != null && (
+                  <span className={`badge ${p.placement === 1 ? "badge-success" : p.placement <= 3 ? "badge-primary" : ""}`}>
+                    #{p.placement}
+                  </span>
+                )}
                 <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
                 <span className="badge">{p.status}</span>
                 {p.timeMs != null && <span className="text-sm"> {(p.timeMs / 1000).toFixed(2)}s</span>}

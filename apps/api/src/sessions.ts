@@ -36,6 +36,7 @@ type SessionPlayerRow = {
   move_sequence: number[] | null;
   finished_at: string | null;
   nickname: string | null;
+  placement: number | null;
 };
 
 function getResolvedAuth(c: Context): ResolvedAuth {
@@ -58,8 +59,11 @@ function isUniqueViolation(error: unknown): boolean {
   return msg.includes("unique") || msg.includes("duplicate");
 }
 
-function resolveWinner(game: "pixelz" | "reflex", players: SessionPlayerRow[]): string | null {
-  if (players.length === 0) return null;
+function resolveAndAssignPlacements(
+  game: "pixelz" | "reflex",
+  players: SessionPlayerRow[]
+): { winnerUserId: string | null; placements: { id: string; placement: number }[] } {
+  if (players.length === 0) return { winnerUserId: null, placements: [] };
   const sorted = [...players].sort((a, b) => {
     if (game === "pixelz") {
       const movesDelta = (a.moves ?? Number.MAX_SAFE_INTEGER) - (b.moves ?? Number.MAX_SAFE_INTEGER);
@@ -68,14 +72,37 @@ function resolveWinner(game: "pixelz" | "reflex", players: SessionPlayerRow[]): 
     }
     return (a.time_ms ?? Number.MAX_SAFE_INTEGER) - (b.time_ms ?? Number.MAX_SAFE_INTEGER);
   });
-  if (sorted.length < 2) return sorted[0]?.user_id ?? null;
-  const first = sorted[0];
-  const second = sorted[1];
-  const tie =
-    game === "pixelz"
-      ? (first.moves === second.moves && first.time_ms === second.time_ms)
-      : first.time_ms === second.time_ms;
-  return tie ? null : first.user_id;
+
+  const placements: { id: string; placement: number }[] = [];
+  let currentPlacement = 1;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i];
+    if (i > 0) {
+      const prev = sorted[i - 1];
+      const tie =
+        game === "pixelz"
+          ? current.moves === prev.moves && current.time_ms === prev.time_ms
+          : current.time_ms === prev.time_ms;
+      if (!tie) {
+        currentPlacement = i + 1;
+      }
+    }
+    placements.push({ id: current.id, placement: currentPlacement });
+  }
+
+  // Determine winner_user_id
+  let winnerUserId: string | null = null;
+  if (sorted.length === 1) {
+    winnerUserId = sorted[0].user_id;
+  } else if (sorted.length > 1) {
+    const firstPlacement = placements.filter((p) => p.placement === 1);
+    if (firstPlacement.length === 1) {
+      winnerUserId = sorted.find((s) => s.id === firstPlacement[0].id)?.user_id ?? null;
+    }
+  }
+
+  return { winnerUserId, placements };
 }
 
 async function getSessionWithPlayers(sessionId: string): Promise<{
@@ -91,7 +118,7 @@ async function getSessionWithPlayers(sessionId: string): Promise<{
   if (sessions.length === 0) return null;
   const players = await sql`
     select
-      p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at,
+      p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at, p.placement,
       u.nickname
     from public.game_session_players p
     left join public.app_users u on u.id = p.user_id
@@ -130,6 +157,7 @@ function sessionResponse(data: { session: SessionRow; players: SessionPlayerRow[
       moveSequence: p.move_sequence,
       finishedAt: p.finished_at,
       nickname: p.nickname,
+      placement: p.placement,
     })),
   };
 }
@@ -469,7 +497,7 @@ export async function handleFinishSession(c: Context): Promise<Response> {
 
     const players = await tx`
       select
-        p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at,
+        p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at, p.placement,
         u.nickname
       from public.game_session_players p
       left join public.app_users u on u.id = p.user_id
@@ -479,7 +507,16 @@ export async function handleFinishSession(c: Context): Promise<Response> {
     const playerRows = players as unknown as SessionPlayerRow[];
     const allFinished = playerRows.every((p) => p.status === "finished");
     if (allFinished) {
-      const winnerUserId = resolveWinner(session.game, playerRows);
+      const { winnerUserId, placements } = resolveAndAssignPlacements(session.game, playerRows);
+      
+      for (const p of placements) {
+        await tx`
+          update public.game_session_players
+          set placement = ${p.placement}
+          where id = ${p.id}::uuid
+        `;
+      }
+
       await tx`
         update public.game_sessions
         set status = 'finished',

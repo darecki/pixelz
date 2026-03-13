@@ -61,6 +61,7 @@ export type SessionResponse = {
     moveSequence: number[] | null;
     finishedAt: string | null;
     nickname: string | null;
+    placement: number | null;
   }>;
 };
 
