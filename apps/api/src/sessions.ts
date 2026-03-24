@@ -6,7 +6,10 @@ import {
   createSessionSchema,
   finishSessionSchema,
   computeSessionScore,
+  type CreateSessionRequest,
   type FinishSessionRequest,
+  type PixelzLevelId,
+  type ReflexLevelId,
 } from "@pixelz/shared";
 import { sql } from "./db.js";
 import type { ResolvedAuth } from "./auth.js";
@@ -23,6 +26,8 @@ type SessionRow = {
   starts_at: string | null;
   finished_at: string | null;
   winner_user_id: string | null;
+  next_session_id: string | null;
+  party_ended_at: string | null;
 };
 
 type SessionPlayerRow = {
@@ -59,6 +64,123 @@ function generateInviteCode(): string {
 function isUniqueViolation(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   return msg.includes("unique") || msg.includes("duplicate");
+}
+
+function isTerminalSessionStatus(status: string): boolean {
+  return status === "finished" || status === "cancelled" || status === "abandoned";
+}
+
+function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "settings" | "max_players">): CreateSessionRequest {
+  if (session.game === "reflex") {
+    if (!session.level_id) throw new Error("Missing reflex level");
+    return {
+      game: "reflex",
+      mode: "predefined",
+      levelId: session.level_id as ReflexLevelId,
+      maxPlayers: session.max_players,
+    };
+  }
+
+  if (session.level_id?.startsWith(PIXELZ_BOARD_ID_PREFIX)) {
+    return {
+      game: "pixelz",
+      mode: "generated",
+      settings: {
+        width: Number((session.settings?.width as number | undefined) ?? 7),
+        height: Number((session.settings?.height as number | undefined) ?? 10),
+        numColors: Number((session.settings?.numColors as number | undefined) ?? 5),
+      },
+      maxPlayers: session.max_players,
+    };
+  }
+
+  if (!session.level_id) throw new Error("Missing pixelz level");
+  return {
+    game: "pixelz",
+    mode: "predefined",
+    levelId: session.level_id as PixelzLevelId,
+    maxPlayers: session.max_players,
+  };
+}
+
+type SessionParticipantSeed = {
+  user_id: string;
+  role: "host" | "guest";
+};
+
+async function createSessionRecord(
+  tx: any,
+  payload: CreateSessionRequest,
+  options?: {
+    previousSessionId?: string | null;
+    players?: SessionParticipantSeed[];
+    hostUserId?: string;
+  }
+): Promise<{ sessionId: string; inviteCode: string }> {
+  const game = payload.game;
+  const maxPlayers = "maxPlayers" in payload && typeof payload.maxPlayers === "number" ? payload.maxPlayers : 2;
+  const seed = crypto.randomUUID();
+  const inviteCode = generateInviteCode();
+  let levelId: string | null =
+    "levelId" in payload && typeof payload.levelId === "string" ? payload.levelId : null;
+  let settings: Record<string, unknown>;
+  if (game === "reflex") {
+    const rounds =
+      levelId && levelId in REFLEX_LEVELS
+        ? REFLEX_LEVELS[levelId as keyof typeof REFLEX_LEVELS]
+        : 10;
+    settings = { rounds };
+  } else if (payload.mode === "generated") {
+    settings = payload.settings;
+  } else {
+    settings = {};
+  }
+
+  if (game === "pixelz" && payload.mode === "generated") {
+    const boardId = PIXELZ_BOARD_ID_PREFIX + crypto.randomUUID();
+    await tx`
+      insert into public.boards (id, width, height, num_colors, seed)
+      values (${boardId}, ${payload.settings.width}, ${payload.settings.height}, ${payload.settings.numColors}, ${seed})
+    `;
+    levelId = boardId;
+  }
+
+  const inserted = await tx`
+    insert into public.game_sessions (game, invite_code, level_id, seed, settings, status, max_players, previous_session_id)
+    values (${game}, ${inviteCode}, ${levelId}, ${seed}, ${settings}, 'waiting', ${maxPlayers}, ${options?.previousSessionId ?? null})
+    returning id
+  `;
+  const sessionId = String(inserted[0].id);
+
+  const players = options?.players ?? (options?.hostUserId
+    ? [{ user_id: options.hostUserId, role: "host" as const }]
+    : []);
+
+  for (const player of players) {
+    await tx`
+      insert into public.game_session_players (session_id, user_id, role, status)
+      values (${sessionId}::uuid, ${player.user_id}::uuid, ${player.role}, 'joined')
+    `;
+  }
+
+  return { sessionId, inviteCode };
+}
+
+async function getNextSessionSummary(
+  executor: typeof sql | any,
+  sessionId: string
+): Promise<{ sessionId: string; inviteCode: string } | null> {
+  const rows = await executor`
+    select id, invite_code
+    from public.game_sessions s
+    where previous_session_id = ${sessionId}::uuid
+    limit 1
+  `;
+  if (rows.length === 0) return null;
+  return {
+    sessionId: String(rows[0].id),
+    inviteCode: String(rows[0].invite_code),
+  };
 }
 
 function resolveAndAssignPlacements(
@@ -121,9 +243,24 @@ async function getSessionWithPlayers(sessionId: string): Promise<{
   players: SessionPlayerRow[];
 } | null> {
   const sessions = await sql`
-    select id, game, invite_code, level_id, seed, settings, status, max_players, starts_at, finished_at, winner_user_id
-    from public.game_sessions
-    where id = ${sessionId}::uuid
+    select
+      s.id,
+      s.game,
+      s.invite_code,
+      s.level_id,
+      s.seed,
+      s.settings,
+      s.status,
+      s.max_players,
+      s.starts_at,
+      s.finished_at,
+      s.winner_user_id,
+      next_session.id as next_session_id,
+      s.party_ended_at
+    from public.game_sessions s
+    left join public.game_sessions next_session
+      on next_session.previous_session_id = s.id
+    where s.id = ${sessionId}::uuid
     limit 1
   `;
   if (sessions.length === 0) return null;
@@ -157,6 +294,8 @@ function sessionResponse(data: { session: SessionRow; players: SessionPlayerRow[
       startsAt: data.session.starts_at,
       finishedAt: data.session.finished_at,
       winnerId: data.session.winner_user_id,
+      nextSessionId: data.session.next_session_id,
+      partyEndedAt: data.session.party_ended_at,
     },
     players: data.players.map((p) => ({
       userId: p.user_id,
@@ -187,54 +326,94 @@ export async function handleCreateSession(c: Context): Promise<Response> {
   }
 
   const payload = parsed.data;
-  const game = payload.game;
-  const maxPlayers = "maxPlayers" in payload && typeof payload.maxPlayers === "number" ? payload.maxPlayers : 2;
-  const seed = crypto.randomUUID();
-  let levelId: string | null =
-    "levelId" in payload && typeof payload.levelId === "string" ? payload.levelId : null;
-  let settings: Record<string, unknown>;
-  if (game === "reflex") {
-    const rounds =
-      levelId && levelId in REFLEX_LEVELS
-        ? REFLEX_LEVELS[levelId as keyof typeof REFLEX_LEVELS]
-        : 10;
-    settings = { rounds };
-  } else if (payload.mode === "generated") {
-    settings = payload.settings;
-  } else {
-    settings = {};
-  }
-
   for (let i = 0; i < 5; i++) {
-    const inviteCode = generateInviteCode();
     try {
-      const created = await sql.begin(async (tx: any) => {
-        if (game === "pixelz" && payload.mode === "generated") {
-          const boardId = PIXELZ_BOARD_ID_PREFIX + crypto.randomUUID();
-          await tx`
-            insert into public.boards (id, width, height, num_colors, seed)
-            values (${boardId}, ${payload.settings.width}, ${payload.settings.height}, ${payload.settings.numColors}, ${seed})
-          `;
-          levelId = boardId;
-        }
-        const inserted = await tx`
-          insert into public.game_sessions (game, invite_code, level_id, seed, settings, status, max_players)
-          values (${game}, ${inviteCode}, ${levelId}, ${seed}, ${settings}, 'waiting', ${maxPlayers})
-          returning id
-        `;
-        const sessionId = String(inserted[0].id);
-        await tx`
-          insert into public.game_session_players (session_id, user_id, role, status)
-          values (${sessionId}::uuid, ${auth.appUserId}::uuid, 'host', 'joined')
-        `;
-        return { sessionId, inviteCode };
-      });
+      const created = await sql.begin((tx: any) =>
+        createSessionRecord(tx, payload, { hostUserId: auth.appUserId })
+      );
       return c.json(created);
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }
   }
   return c.json({ error: "Failed to generate unique invite code" }, 500);
+}
+
+export async function handleCreateNextSession(c: Context): Promise<Response> {
+  const auth = getResolvedAuth(c);
+  const sessionId = c.req.param("id");
+  if (!sessionId) return c.json({ error: "Missing session id" }, 400);
+
+  for (let i = 0; i < 5; i++) {
+    try {
+      const created = await sql.begin(async (tx: any) => {
+        const sessions = await tx`
+          select
+            id,
+            game,
+            invite_code,
+            level_id,
+            seed,
+            settings,
+            status,
+            max_players,
+            starts_at,
+            finished_at,
+            winner_user_id,
+            null::uuid as next_session_id,
+            party_ended_at
+          from public.game_sessions
+          where id = ${sessionId}::uuid
+          for update
+        `;
+        if (sessions.length === 0) return { error: "Session not found", status: 404 } as const;
+
+        const source = sessions[0] as SessionRow;
+        if (!isTerminalSessionStatus(source.status)) {
+          return { error: "Session does not support next game yet", status: 409 } as const;
+        }
+
+        const meRows = await tx`
+          select role
+          from public.game_session_players
+          where session_id = ${sessionId}::uuid and user_id = ${auth.appUserId}::uuid
+          limit 1
+          for update
+        `;
+        if (meRows.length === 0) return { error: "Not a session participant", status: 403 } as const;
+        if (String((meRows[0] as { role: string }).role) !== "host") {
+          return { error: "Only the host can create the next session", status: 403 } as const;
+        }
+
+        const existing = await getNextSessionSummary(tx, sessionId);
+        if (existing) return existing;
+
+        const players = await tx`
+          select user_id, role
+          from public.game_session_players
+          where session_id = ${sessionId}::uuid
+          order by case when role = 'host' then 0 else 1 end, id asc
+        `;
+        const payload = deriveSessionPayload(source);
+        return createSessionRecord(tx, payload, {
+          previousSessionId: sessionId,
+          players: players as SessionParticipantSeed[],
+        });
+      });
+
+      if ("error" in created) {
+        return c.json({ error: created.error }, created.status as 403 | 404 | 409);
+      }
+
+      return c.json(created);
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const existing = await getNextSessionSummary(sql, sessionId);
+      if (existing) return c.json(existing);
+    }
+  }
+
+  return c.json({ error: "Failed to create next session" }, 500);
 }
 
 export async function handleGetSessionInvite(c: Context): Promise<Response> {
@@ -346,8 +525,8 @@ export async function handleReadySession(c: Context): Promise<Response> {
     if (meRow.length === 0) return { error: "Not a session participant", status: 403 };
 
     const playerCount = participants.length;
-    if (playerCount !== session.max_players) {
-      return { error: "Lobby is not full", status: 409 };
+    if (playerCount < 2) {
+      return { error: "At least 2 players are required", status: 409 };
     }
 
     const currentStatus = String((meRow[0] as { status: string }).status);
@@ -405,7 +584,7 @@ export async function handleBeginSession(c: Context): Promise<Response> {
       select count(*) as count from public.game_session_players where session_id = ${sessionId}::uuid
     `;
     const playerCount = Number((countRows[0] as { count: string }).count);
-    if (playerCount !== session.max_players) return { error: "Lobby is not full", status: 409 };
+    if (playerCount < 2) return { error: "At least 2 players are required", status: 409 };
 
     if (session.status === "playing") return { ok: true };
     if (session.status !== "ready") return { error: "Session is not ready to begin", status: 409 };
@@ -574,6 +753,16 @@ export async function handleLeaveSession(c: Context): Promise<Response> {
     const me = players[0] as { role: "host" | "guest" };
 
     if (session.status === "finished" || session.status === "cancelled" || session.status === "abandoned") {
+      if (me.role === "host") {
+        const nextSession = await getNextSessionSummary(tx, sessionId);
+        if (!nextSession) {
+          await tx`
+            update public.game_sessions
+            set party_ended_at = coalesce(party_ended_at, now())
+            where id = ${sessionId}::uuid
+          `;
+        }
+      }
       return { ok: true };
     }
 

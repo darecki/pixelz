@@ -3,10 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getGameById } from "../games/registry";
 import {
   beginSession,
-  createSession,
+  createNextSession,
   fetchSession,
   finishSession,
-  joinSession,
   leaveSession,
   markSessionReady,
   type SessionResponse,
@@ -40,19 +39,9 @@ export default function SessionRoom() {
     const next = await fetchSession(sessionId);
     setData(next);
   }, [sessionId]);
-  const handleHint = useCallback(async (event?: string, payload?: Record<string, unknown>) => {
-    if (event === "next_game_created" && payload?.nextSessionId) {
-      const nextId = payload.nextSessionId as string;
-      try {
-        await joinSession(nextId);
-        navigate(`/session/${encodeURIComponent(nextId)}`);
-      } catch (err) {
-        console.error("Auto-join failed:", err);
-      }
-    } else {
-      refresh().catch(() => {});
-    }
-  }, [refresh, navigate]);
+  const handleHint = useCallback(async () => {
+    refresh().catch(() => {});
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +72,13 @@ export default function SessionRoom() {
   const remainingMs = data?.session.startsAt
     ? new Date(data.session.startsAt).getTime() - tickNow
     : 0;
+  const isTerminalSession = Boolean(
+    data && (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned")
+  );
+  const currentPlayer = data?.players.find((p) => p.userId === data.currentUserId) ?? null;
+  const shouldPollPlayingResults = Boolean(
+    data?.session.status === "playing" && currentPlayer?.status === "finished"
+  );
 
   useEffect(() => {
     if (!data || data.session.status !== "ready" || !data.session.startsAt) return;
@@ -102,12 +98,24 @@ export default function SessionRoom() {
   }, [data?.session.status]);
 
   useEffect(() => {
-    if (!data || (data.session.status !== "waiting" && data.session.status !== "ready")) return;
+    if (!data) return;
+    const shouldPoll =
+      data.session.status === "waiting" ||
+      data.session.status === "ready" ||
+      shouldPollPlayingResults ||
+      (isTerminalSession && !data.session.nextSessionId && !data.session.partyEndedAt);
+    if (!shouldPoll) return;
     const id = window.setInterval(() => {
       refresh().catch(() => {});
     }, LOBBY_POLL_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [data, refresh]);
+  }, [data, isTerminalSession, refresh, shouldPollPlayingResults]);
+
+  useEffect(() => {
+    const nextSessionId = data?.session.nextSessionId;
+    if (!nextSessionId || nextSessionId === sessionId) return;
+    navigate(`/session/${encodeURIComponent(nextSessionId)}`, { replace: true });
+  }, [data?.session.nextSessionId, navigate, sessionId]);
 
   useEffect(() => {
     return () => {
@@ -150,6 +158,9 @@ export default function SessionRoom() {
     setWorking(true);
     try {
       await leaveSession(data.session.id);
+      if (isTerminalSession && currentPlayer?.role === "host" && !data.session.nextSessionId) {
+        await broadcast("party_closed", { sessionId: data.session.id });
+      }
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to leave session");
@@ -172,34 +183,7 @@ export default function SessionRoom() {
     if (!data) return;
     setWorking(true);
     try {
-      let created;
-      if (data.session.game === "reflex") {
-        if (!data.session.levelId) throw new Error("Missing reflex level");
-        created = await createSession({
-          game: "reflex",
-          mode: "predefined",
-          levelId: data.session.levelId,
-          maxPlayers: data.session.maxPlayers,
-        });
-      } else if (data.session.levelId?.startsWith("pixelz_level_")) {
-        created = await createSession({
-          game: "pixelz",
-          mode: "predefined",
-          levelId: data.session.levelId,
-          maxPlayers: data.session.maxPlayers,
-        });
-      } else {
-        created = await createSession({
-          game: "pixelz",
-          mode: "generated",
-          settings: {
-            width: Number((data.session.settings?.width as number | undefined) ?? 7),
-            height: Number((data.session.settings?.height as number | undefined) ?? 10),
-            numColors: Number((data.session.settings?.numColors as number | undefined) ?? 5),
-          },
-          maxPlayers: data.session.maxPlayers,
-        });
-      }
+      const created = await createNextSession(data.session.id);
       await broadcast("next_game_created", { nextSessionId: created.sessionId });
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
     } catch (err) {
@@ -216,7 +200,7 @@ export default function SessionRoom() {
   const game = getGameById(data.session.game);
   const GameComponent = game?.component;
   const selfUserId = data.currentUserId;
-  const me = data.players.find((p) => p.userId === selfUserId) ?? null;
+  const me = currentPlayer;
   const opponents = data.players.filter((p) => p.userId !== selfUserId);
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
@@ -254,10 +238,14 @@ export default function SessionRoom() {
               <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
                 Play Next Game
               </button>
+            ) : data.session.partyEndedAt ? (
+              <span className="text-muted">The host ended the party.</span>
             ) : (
               <span className="text-muted">Waiting for host to start the next game.</span>
             )}
-            <button type="button" onClick={() => navigate("/")} className="btn btn-ghost">Leave</button>
+            <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
+              Leave
+            </button>
           </div>
         </div>
       </div>
@@ -326,10 +314,10 @@ export default function SessionRoom() {
             <button
               type="button"
               onClick={handleReady}
-              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished" || data.players.length < data.session.maxPlayers}
+              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished" || data.players.length < 2}
               className="btn btn-primary"
             >
-              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : data.players.length < data.session.maxPlayers ? "Waiting for players…" : "Ready"}
+              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : data.players.length < 2 ? "Waiting for players…" : "Ready"}
             </button>
             <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
               Leave

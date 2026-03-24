@@ -51,6 +51,8 @@ export type SessionResponse = {
     startsAt: string | null;
     finishedAt: string | null;
     winnerId: string | null;
+    nextSessionId: string | null;
+    partyEndedAt: string | null;
   };
   players: Array<{
     userId: string;
@@ -200,6 +202,19 @@ export async function joinSession(sessionId: string): Promise<void> {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? "Failed to join session");
   }
+}
+
+export async function createNextSession(sessionId: string): Promise<CreateSessionResponse> {
+  const headers = await getAuthHeadersForSessionRequest(true);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/next`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to create next session");
+  }
+  return res.json();
 }
 
 async function postSessionAction(sessionId: string, action: "ready" | "begin" | "leave"): Promise<void> {
