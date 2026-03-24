@@ -18,7 +18,7 @@ import { hashString, mulberry32 } from "@pixelz/shared";
 type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting" | "submitError";
 type SessionGameProps = {
   seed: string;
-  onComplete: (result: { moves: number; timeMs: number }) => void | Promise<void>;
+  onComplete: (result: { moves: number; timeMs: number; disqualified?: boolean }) => void | Promise<void>;
   onProgress?: (progress: { moves: number; timeMs: number }) => void;
 };
 
@@ -42,13 +42,14 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const [targetColor, setTargetColor] = useState<string | null>(null);
   const [promptRank, setPromptRank] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [sessionOutcome, setSessionOutcome] = useState<"completed" | "disqualified" | null>(null);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const delayTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ moves: number; timeMs: number } | null>(null);
-  const pendingSessionResultRef = useRef<{ moves: number; timeMs: number } | null>(null);
+  const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; disqualified?: boolean } | null>(null);
 
   const deterministicSequenceRef = useRef<string[]>([]);
   const pickTargetColor = useCallback(
@@ -82,6 +83,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     scoreSubmittedRef.current = false;
     pendingSessionResultRef.current = null;
     setSubmitError(null);
+    setSessionOutcome(null);
     setPhase("countdown");
     setRound(1);
     setCumulativeTimeMs(0);
@@ -143,6 +145,15 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     if (phase !== "reaction" || !targetColor) return;
     if (scoreSubmittedRef.current) return;
     if (clickedColor !== targetColor) {
+      if (sessionProps?.onComplete) {
+        const finalTime = cumulativeTimeMs + Math.round(performance.now() - reactionStartRef.current);
+        scoreSubmittedRef.current = true;
+        pendingSessionResultRef.current = { moves: round - 1, timeMs: finalTime, disqualified: true };
+        setSessionOutcome("disqualified");
+        setCumulativeTimeMs(finalTime);
+        submitSessionCompletion().catch(() => {});
+        return;
+      }
       setPhase("gameover");
       return;
     }
@@ -153,6 +164,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     if (round >= totalRounds) {
       if (scoreSubmittedRef.current) return;
       scoreSubmittedRef.current = true;
+      setSessionOutcome("completed");
 
       if (sessionProps?.onComplete) {
         pendingSessionResultRef.current = { moves: totalRounds, timeMs: newTotal };
@@ -288,7 +300,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   if (phase === "submitError") {
     return (
       <div className="game-container game-result" style={{ justifyContent: "center" }}>
-        <h2>Submit failed</h2>
+        <h2>{sessionOutcome === "disqualified" ? "Disqualification submit failed" : "Submit failed"}</h2>
         <p className="text-error mb-sm">{submitError ?? "Failed to submit result."}</p>
         <p className="game-result-stats">
           Total time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
@@ -306,6 +318,21 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   }
 
   if (phase === "saving" || phase === "finished") {
+    if (sessionOutcome === "disqualified") {
+      return (
+        <div className="game-container game-result" style={{ justifyContent: "center" }}>
+          <h2 style={{ color: "var(--color-error)" }}>Disqualified</h2>
+          <p className="game-result-stats">
+            Wrong answer on round <strong>{round}</strong>. Final time: <strong>{(cumulativeTimeMs / 1000).toFixed(2)}s</strong>
+          </p>
+          {phase === "saving" ? (
+            <p className="loading-text text-sm">Submitting disqualification…</p>
+          ) : (
+            <p className="text-secondary text-center">Your run is locked. Waiting for the rest of the session to finish.</p>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="game-container game-result" style={{ justifyContent: "center" }}>
         <h2>Done! 🎉</h2>

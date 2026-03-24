@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import {
+  handleBeginSession,
   handleCreateSession,
+  handleCreateNextSession,
+  handleFinishSession,
   handleGetSession,
   handleGetSessionInvite,
   handleJoinSession,
   handleLeaveSession,
+  handleReadySession,
 } from "./sessions.js";
 
 const { mockSql } = vi.hoisted(() => {
@@ -116,6 +120,48 @@ describe("session auth guards", () => {
     app.get("/sessions/:id", handleGetSession);
     const res = await app.request("/sessions/session-1");
     expect(res.status).toBe(403);
+  });
+
+  it("returns nextSessionId when a successor session exists", async () => {
+    mockSql
+      .mockResolvedValueOnce([{ exists: 1 }])
+      .mockResolvedValueOnce([{
+        id: "session-1",
+        game: "pixelz",
+        invite_code: "abc123",
+        level_id: "pixelz_level_1",
+        seed: "seed-1",
+        settings: {},
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: "session-2",
+      }])
+      .mockResolvedValueOnce([{
+        id: "player-1",
+        session_id: "session-1",
+        user_id: "host-1",
+        role: "host",
+        status: "finished",
+        score: 123,
+        moves: 10,
+        time_ms: 5000,
+        move_sequence: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        placement: 1,
+        disqualified: false,
+        nickname: "Host",
+      }]);
+    const app = createAuthedApp("host-1");
+    app.get("/sessions/:id", handleGetSession);
+
+    const res = await app.request("/sessions/session-1");
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as Record<string, any>;
+    expect(json.session.nextSessionId).toBe("session-2");
   });
 });
 
@@ -231,6 +277,259 @@ describe("POST /sessions/:id/join", () => {
   });
 });
 
+describe("POST /sessions/:id/ready", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+    mockSql.begin.mockReset();
+  });
+
+  it("allows the present players to ready up even when the lobby is below max capacity", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", status: "waiting", max_players: 3 }],
+      [
+        { id: "host-player", status: "joined" },
+        { id: "guest-player", status: "joined" },
+      ],
+      [{ id: "host-player", status: "joined" }],
+      [],
+      [
+        { status: "ready" },
+        { status: "ready" },
+      ],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/ready", handleReadySession);
+    const res = await app.request("/sessions/session-1/ready", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const issuedSql = tx.mock.calls.map((call) => sqlTextFromCall(call));
+    expect(issuedSql.some((q) => q.includes("set status = 'ready'"))).toBe(true);
+    expect(issuedSql.some((q) => q.includes("starts_at = now()"))).toBe(true);
+  });
+});
+
+describe("POST /sessions/:id/begin", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+    mockSql.begin.mockReset();
+  });
+
+  it("begins a ready session with the players who joined, even when max capacity was higher", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", status: "ready", max_players: 3, starts_at: "2026-03-24T10:00:00Z" }],
+      [{ exists: 1 }],
+      [{ count: "2" }],
+      [{ can_start: true }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/begin", handleBeginSession);
+    const res = await app.request("/sessions/session-1/begin", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const issuedSql = tx.mock.calls.map((call) => sqlTextFromCall(call));
+    expect(issuedSql.some((q) => q.includes("update public.game_sessions set status = 'playing'"))).toBe(true);
+    expect(issuedSql.some((q) => q.includes("update public.game_session_players"))).toBe(true);
+  });
+});
+
+describe("POST /sessions/:id/next", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+    mockSql.begin.mockReset();
+  });
+
+  it("creates a successor session with the prior roster and a previous_session_id link", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "reflex",
+        invite_code: "abc123",
+        level_id: "reflex_level_0",
+        seed: "seed-1",
+        settings: { rounds: 10 },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+      [
+        { user_id: "host-1", role: "host" },
+        { user_id: "guest-1", role: "guest" },
+      ],
+      [{ id: "session-2" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const payload = await res.json() as { sessionId: string; inviteCode: string };
+    expect(payload.sessionId).toBe("session-2");
+    expect(payload.inviteCode).toHaveLength(8);
+
+    const issuedSql = tx.mock.calls.map((call) => sqlTextFromCall(call));
+    expect(issuedSql.some((q) => q.includes("previous_session_id"))).toBe(true);
+    expect(issuedSql.filter((q) => q.includes("insert into public.game_session_players")).length).toBe(2);
+  });
+
+  it("creates a fresh generated pixelz rematch using the same settings", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "pixelz",
+        invite_code: "abc123",
+        level_id: "pixelz_old",
+        seed: "seed-1",
+        settings: { width: 7, height: 10, numColors: 5 },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+      [
+        { user_id: "host-1", role: "host" },
+        { user_id: "guest-1", role: "guest" },
+      ],
+      [],
+      [{ id: "session-2" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const boardInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.boards"));
+    expect(boardInsert).toBeDefined();
+    expect(boardInsert).toContain(7);
+    expect(boardInsert).toContain(10);
+    expect(boardInsert).toContain(5);
+  });
+
+  it("keeps predefined pixelz rematches on the predefined level path", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "pixelz",
+        invite_code: "abc123",
+        level_id: "pixelz_level_1",
+        seed: "seed-1",
+        settings: {},
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+      [
+        { user_id: "host-1", role: "host" },
+        { user_id: "guest-1", role: "guest" },
+      ],
+      [{ id: "session-2" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const boardInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.boards"));
+    expect(boardInsert).toBeUndefined();
+    const sessionInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.game_sessions"));
+    expect(sessionInsert).toBeDefined();
+    expect(sessionInsert).toContain("pixelz_level_1");
+  });
+
+  it("returns the existing successor session idempotently", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "reflex",
+        invite_code: "abc123",
+        level_id: "reflex_level_0",
+        seed: "seed-1",
+        settings: { rounds: 10 },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [{ id: "session-2", invite_code: "next123" }],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ sessionId: "session-2", inviteCode: "next123" });
+    const issuedSql = tx.mock.calls.map((call) => sqlTextFromCall(call));
+    expect(issuedSql.some((q) => q.includes("insert into public.game_sessions"))).toBe(false);
+  });
+
+  it("rejects non-host users", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "reflex",
+        invite_code: "abc123",
+        level_id: "reflex_level_0",
+        seed: "seed-1",
+        settings: { rounds: 10 },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "guest" }],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("guest-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Only the host can create the next session" });
+  });
+});
+
 describe("POST /sessions/:id/leave", () => {
   beforeEach(() => {
     mockSql.mockReset();
@@ -274,5 +573,91 @@ describe("POST /sessions/:id/leave", () => {
     expect(issuedSql.some((q) => q.includes("delete from public.game_session_players"))).toBe(true);
     expect(issuedSql.some((q) => q.includes("set status = 'waiting'"))).toBe(true);
     expect(issuedSql.some((q) => q.includes("set status = 'joined'"))).toBe(true);
+  });
+
+  it("marks the party as ended when the host leaves after the session is finished", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", status: "finished" }],
+      [{ id: "p-1", role: "host" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/leave", handleLeaveSession);
+    const res = await app.request("/sessions/session-1/leave", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const issuedSql = tx.mock.calls.map((call) => sqlTextFromCall(call));
+    expect(issuedSql.some((q) => q.includes("party_ended_at"))).toBe(true);
+  });
+});
+
+describe("POST /sessions/:id/finish", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+    mockSql.begin.mockReset();
+  });
+
+  it("keeps a disqualified reflex player from winning the session", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", game: "reflex", level_id: "reflex_level_0", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
+      [{ can_finish: true }],
+      [{ status: "playing" }],
+      [],
+      [
+        {
+          id: "player-host",
+          session_id: "session-1",
+          user_id: "host-1",
+          role: "host",
+          status: "finished",
+          score: 100,
+          moves: 0,
+          time_ms: 100,
+          move_sequence: null,
+          finished_at: "2026-03-24T10:00:05Z",
+          nickname: "Host",
+          placement: null,
+          disqualified: true,
+        },
+        {
+          id: "player-guest",
+          session_id: "session-1",
+          user_id: "guest-1",
+          role: "guest",
+          status: "finished",
+          score: 450,
+          moves: 5,
+          time_ms: 450,
+          move_sequence: null,
+          finished_at: "2026-03-24T10:00:06Z",
+          nickname: "Guest",
+          placement: null,
+          disqualified: false,
+        },
+      ],
+      [],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/finish", handleFinishSession);
+    const res = await app.request("/sessions/session-1/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ moves: 0, timeMs: 100, disqualified: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const winnerUpdate = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("winner_user_id"));
+    expect(winnerUpdate).toBeDefined();
+    expect(winnerUpdate).toContain("guest-1");
   });
 });

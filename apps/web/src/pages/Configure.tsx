@@ -7,6 +7,11 @@ import { supabase } from "../lib/supabase";
 
 const PIXELZ_DEFAULTS = { width: 7, height: 10, numColors: 5 };
 
+function clampInviteMaxPlayers(value: number): number {
+  if (Number.isNaN(value)) return 2;
+  return Math.min(10, Math.max(2, Math.trunc(value)));
+}
+
 function playUrl(boardId: string): string {
   const path = `/play?game=pixelz&level=${encodeURIComponent(boardId)}`;
   return typeof window !== "undefined" ? window.location.origin + path : path;
@@ -26,6 +31,7 @@ export default function Configure() {
   const [inviteCreating, setInviteCreating] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteReflexLevel, setInviteReflexLevel] = useState<string>("reflex_level_0");
+  const [inviteMaxPlayers, setInviteMaxPlayers] = useState(2);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +79,7 @@ export default function Configure() {
           game: "pixelz",
           mode: "generated",
           settings: pixelzParams,
+          maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
         }, session.access_token);
         
         const inviteUrl = typeof window !== "undefined"
@@ -132,11 +139,13 @@ export default function Configure() {
               game: "reflex",
               mode: "predefined",
               levelId: inviteReflexLevel,
+              maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
             }, session.access_token)
           : await createSession({
               game: "pixelz",
               mode: "generated",
               settings: pixelzParams,
+              maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
             }, session.access_token);
 
       const inviteUrl =
@@ -227,7 +236,7 @@ export default function Configure() {
                       style={{ width: 60 }}
                     />
                   </label>
-                  <div className="flex gap-sm mt-sm">
+                  <div className="flex gap-sm mt-sm items-center flex-wrap">
                     <button
                       type="button"
                       onClick={() => handleNewPixelzBoard(false)}
@@ -236,15 +245,28 @@ export default function Configure() {
                     >
                       {pixelzCreating ? "Creating…" : "Generate & Play"}
                     </button>
+                    <div className="flex items-center gap-xs ml-auto">
+                      <label className="text-sm font-medium" htmlFor="custom-invite-max-players">Max Players:</label>
+                      <input
+                        id="custom-invite-max-players"
+                        type="number"
+                        min={2}
+                        max={10}
+                        value={inviteMaxPlayers}
+                        onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+                        className="input input--inline"
+                        style={{ width: 60 }}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleNewPixelzBoard(true)}
                       disabled={pixelzCreating}
                       className="btn btn-primary"
                     >
-                      {pixelzCreating ? "Creating…" : "Generate & Create 1:1 Invite"}
+                      {pixelzCreating ? "Creating…" : "Generate & Create Multiplayer Invite"}
                     </button>
-                    {inviteError && <span className="text-error text-sm">{inviteError}</span>}
+                    {inviteError && <span className="text-error text-sm w-full">{inviteError}</span>}
                   </div>
                 </div>
               </div>
@@ -300,10 +322,23 @@ export default function Configure() {
         )}
       </section>
 
-      {/* ── 1:1 Challenge ── */}
+      {/* ── Multiplayer Challenge ── */}
       <section className="config-section">
-        <h3 className="section-title">1:1 Challenge</h3>
+        <h3 className="section-title">Multiplayer Challenge</h3>
         <div className="config-row">
+          <label className="text-sm" htmlFor="invite-max-players">
+            Max Players:{" "}
+          </label>
+          <input
+            id="invite-max-players"
+            type="number"
+            min={2}
+            max={10}
+            value={inviteMaxPlayers}
+            onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+            className="input input--inline"
+            style={{ width: 60 }}
+          />
           {selectedGame?.id === "reflex" && (
             <label className="text-sm">
               Level:{" "}

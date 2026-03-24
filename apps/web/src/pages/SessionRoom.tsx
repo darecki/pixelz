@@ -3,15 +3,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getGameById } from "../games/registry";
 import {
   beginSession,
-  createSession,
+  createNextSession,
   fetchSession,
   finishSession,
-  joinSession,
   leaveSession,
   markSessionReady,
   type SessionResponse,
 } from "../lib/api";
 import { useGameSession } from "../hooks/useGameSession";
+
+const LOBBY_POLL_INTERVAL_MS = 1000;
 
 function useNowTick(enabled: boolean) {
   const [now, setNow] = useState(Date.now());
@@ -38,19 +39,9 @@ export default function SessionRoom() {
     const next = await fetchSession(sessionId);
     setData(next);
   }, [sessionId]);
-  const handleHint = useCallback(async (event?: string, payload?: Record<string, unknown>) => {
-    if (event === "next_game_created" && payload?.nextSessionId) {
-      const nextId = payload.nextSessionId as string;
-      try {
-        await joinSession(nextId);
-        navigate(`/session/${encodeURIComponent(nextId)}`);
-      } catch (err) {
-        console.error("Auto-join failed:", err);
-      }
-    } else {
-      refresh().catch(() => {});
-    }
-  }, [refresh, navigate]);
+  const handleHint = useCallback(async () => {
+    refresh().catch(() => {});
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +72,13 @@ export default function SessionRoom() {
   const remainingMs = data?.session.startsAt
     ? new Date(data.session.startsAt).getTime() - tickNow
     : 0;
+  const isTerminalSession = Boolean(
+    data && (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned")
+  );
+  const currentPlayer = data?.players.find((p) => p.userId === data.currentUserId) ?? null;
+  const shouldPollPlayingResults = Boolean(
+    data?.session.status === "playing" && currentPlayer?.status === "finished"
+  );
 
   useEffect(() => {
     if (!data || data.session.status !== "ready" || !data.session.startsAt) return;
@@ -98,6 +96,26 @@ export default function SessionRoom() {
       beginTriggeredRef.current = false;
     }
   }, [data?.session.status]);
+
+  useEffect(() => {
+    if (!data) return;
+    const shouldPoll =
+      data.session.status === "waiting" ||
+      data.session.status === "ready" ||
+      shouldPollPlayingResults ||
+      (isTerminalSession && !data.session.nextSessionId && !data.session.partyEndedAt);
+    if (!shouldPoll) return;
+    const id = window.setInterval(() => {
+      refresh().catch(() => {});
+    }, LOBBY_POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [data, isTerminalSession, refresh, shouldPollPlayingResults]);
+
+  useEffect(() => {
+    const nextSessionId = data?.session.nextSessionId;
+    if (!nextSessionId || nextSessionId === sessionId) return;
+    navigate(`/session/${encodeURIComponent(nextSessionId)}`, { replace: true });
+  }, [data?.session.nextSessionId, navigate, sessionId]);
 
   useEffect(() => {
     return () => {
@@ -140,14 +158,18 @@ export default function SessionRoom() {
     setWorking(true);
     try {
       await leaveSession(data.session.id);
+      if (isTerminalSession && currentPlayer?.role === "host" && !data.session.nextSessionId) {
+        void broadcast("party_closed", { sessionId: data.session.id }).catch(() => {});
+      }
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to leave session");
+    } finally {
       setWorking(false);
     }
   }
 
-  async function handleComplete(result: { moves: number; timeMs: number; moveSequence?: number[] }) {
+  async function handleComplete(result: { moves: number; timeMs: number; moveSequence?: number[]; disqualified?: boolean }) {
     if (!data) return;
     try {
       await finishSession(data.session.id, result);
@@ -162,33 +184,9 @@ export default function SessionRoom() {
     if (!data) return;
     setWorking(true);
     try {
-      let created;
-      if (data.session.game === "reflex") {
-        if (!data.session.levelId) throw new Error("Missing reflex level");
-        created = await createSession({
-          game: "reflex",
-          mode: "predefined",
-          levelId: data.session.levelId,
-        });
-      } else if (data.session.levelId?.startsWith("pixelz_level_")) {
-        created = await createSession({
-          game: "pixelz",
-          mode: "predefined",
-          levelId: data.session.levelId,
-        });
-      } else {
-        created = await createSession({
-          game: "pixelz",
-          mode: "generated",
-          settings: {
-            width: Number((data.session.settings?.width as number | undefined) ?? 7),
-            height: Number((data.session.settings?.height as number | undefined) ?? 10),
-            numColors: Number((data.session.settings?.numColors as number | undefined) ?? 5),
-          },
-        });
-      }
-      await broadcast("next_game_created", { nextSessionId: created.sessionId });
+      const created = await createNextSession(data.session.id);
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
+      void broadcast("next_game_created", { nextSessionId: created.sessionId }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create next session");
     } finally {
@@ -203,22 +201,34 @@ export default function SessionRoom() {
   const game = getGameById(data.session.game);
   const GameComponent = game?.component;
   const selfUserId = data.currentUserId;
-  const me = data.players.find((p) => p.userId === selfUserId) ?? null;
-  const opponent = data.players.find((p) => p.userId !== selfUserId) ?? null;
-  const opponentProgress = opponent ? progressByUser[opponent.userId] : null;
+  const me = currentPlayer;
+  const opponents = data.players.filter((p) => p.userId !== selfUserId);
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
     const canCreateNextSession = me?.role === "host";
+    const sortedPlayers = [...data.players].sort((a, b) => {
+      if (a.placement != null && b.placement != null) return a.placement - b.placement;
+      if (a.placement != null) return -1;
+      if (b.placement != null) return 1;
+      return 0; // fallback if neither has placement
+    });
+
     return (
       <div className="page-container">
         <div className="card">
           <h2 className="mb-md">Session Results</h2>
           <p className="text-secondary mb-sm">Status: <span className="badge">{data.session.status}</span></p>
           <ul className="lobby-players">
-            {data.players.map((p) => (
+            {sortedPlayers.map((p) => (
               <li key={p.userId} className="lobby-player">
+                {p.placement != null && (
+                  <span className={`badge ${p.placement === 1 ? "badge-success" : p.placement <= 3 ? "badge-primary" : ""}`}>
+                    #{p.placement}
+                  </span>
+                )}
                 <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
                 <span className="badge">{p.status}</span>
+                {p.disqualified && <span className="badge">DQ</span>}
                 {p.timeMs != null && <span className="text-sm"> {(p.timeMs / 1000).toFixed(2)}s</span>}
                 {p.score != null && <span className="text-sm"> score {p.score}</span>}
               </li>
@@ -229,10 +239,14 @@ export default function SessionRoom() {
               <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
                 Play Next Game
               </button>
+            ) : data.session.partyEndedAt ? (
+              <span className="text-muted">The host ended the party.</span>
             ) : (
               <span className="text-muted">Waiting for host to start the next game.</span>
             )}
-            <button type="button" onClick={() => navigate("/")} className="btn btn-ghost">Leave</button>
+            <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
+              Leave
+            </button>
           </div>
         </div>
       </div>
@@ -301,10 +315,10 @@ export default function SessionRoom() {
             <button
               type="button"
               onClick={handleReady}
-              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished" || data.players.length < data.session.maxPlayers}
+              disabled={working || me?.status === "ready" || me?.status === "playing" || me?.status === "finished" || data.players.length < 2}
               className="btn btn-primary"
             >
-              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : data.players.length < data.session.maxPlayers ? "Waiting for players…" : "Ready"}
+              {working ? "Please wait…" : me?.status === "ready" ? "Ready ✓" : data.players.length < 2 ? "Waiting for players…" : "Ready"}
             </button>
             <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
               Leave
@@ -321,12 +335,19 @@ export default function SessionRoom() {
 
   return (
     <div>
-      {opponent && (
-        <div className="opponent-bar">
-          Opponent: <strong>{opponent.nickname ?? opponent.userId}</strong>
-          {opponentProgress
-            ? ` · ${opponentProgress.moves} moves · ${(opponentProgress.timeMs / 1000).toFixed(1)}s`
-            : " · no progress yet"}
+      {opponents.length > 0 && (
+        <div className="flex flex-col gap-sm mb-md opponents-container">
+          {opponents.map((opp) => {
+            const prog = progressByUser[opp.userId];
+            return (
+              <div key={opp.userId} className="opponent-bar">
+                <strong>{opp.nickname ?? opp.userId}</strong>
+                {prog
+                  ? ` · ${prog.moves} moves · ${(prog.timeMs / 1000).toFixed(1)}s`
+                  : " · no progress yet"}
+              </div>
+            );
+          })}
         </div>
       )}
       <Suspense fallback={<div className="page-container"><p className="loading-text">Loading game…</p></div>}>

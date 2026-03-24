@@ -11,6 +11,7 @@ import { checkRateLimit } from "./rateLimit.js";
 import {
   handleBeginSession,
   handleCreateSession,
+  handleCreateNextSession,
   handleFinishSession,
   handleGetSession,
   handleGetSessionInvite,
@@ -105,6 +106,7 @@ app.get("/sessions/invite/:inviteCode", async (c, next) => {
   await next();
 }, handleGetSessionInvite);
 app.post("/sessions", flexAuthMiddleware, handleCreateSession);
+app.post("/sessions/:id/next", flexAuthMiddleware, handleCreateNextSession);
 app.post("/sessions/:id/join", flexAuthMiddleware, async (c, next) => {
   const auth = c.get("resolvedAuth") as ResolvedAuth;
   const identifier = auth?.appUserId ?? requestIdentifier(c);

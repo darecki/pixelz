@@ -25,6 +25,7 @@ export type SessionGame = "pixelz" | "reflex";
 export type SessionStatus = "waiting" | "ready" | "playing" | "finished" | "cancelled" | "abandoned";
 export type SessionPlayerStatus = "joined" | "ready" | "playing" | "finished" | "abandoned";
 export type SessionPlayerRole = "host" | "guest";
+export type SessionFinishPayload = { moves: number; timeMs: number; moveSequence?: number[]; disqualified?: boolean };
 
 export type SessionInvitePreview = {
   sessionId: string;
@@ -50,6 +51,8 @@ export type SessionResponse = {
     startsAt: string | null;
     finishedAt: string | null;
     winnerId: string | null;
+    nextSessionId: string | null;
+    partyEndedAt: string | null;
   };
   players: Array<{
     userId: string;
@@ -61,13 +64,15 @@ export type SessionResponse = {
     moveSequence: number[] | null;
     finishedAt: string | null;
     nickname: string | null;
+    placement: number | null;
+    disqualified: boolean;
   }>;
 };
 
 export type CreateSessionRequest =
-  | { game: "pixelz"; mode: "predefined"; levelId: string }
-  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number } }
-  | { game: "reflex"; mode: "predefined"; levelId: string };
+  | { game: "pixelz"; mode: "predefined"; levelId: string; maxPlayers?: number }
+  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number }; maxPlayers?: number }
+  | { game: "reflex"; mode: "predefined"; levelId: string; maxPlayers?: number };
 
 export type CreateSessionResponse = { sessionId: string; inviteCode: string };
 
@@ -199,6 +204,19 @@ export async function joinSession(sessionId: string): Promise<void> {
   }
 }
 
+export async function createNextSession(sessionId: string): Promise<CreateSessionResponse> {
+  const headers = await getAuthHeadersForSessionRequest(true);
+  const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/next`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? "Failed to create next session");
+  }
+  return res.json();
+}
+
 async function postSessionAction(sessionId: string, action: "ready" | "begin" | "leave"): Promise<void> {
   const headers = await getAuthHeadersForSessionRequest(false);
   const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/${action}`, {
@@ -229,7 +247,7 @@ export async function leaveSession(sessionId: string): Promise<void> {
 
 export async function finishSession(
   sessionId: string,
-  payload: { moves: number; timeMs: number; moveSequence?: number[] }
+  payload: SessionFinishPayload
 ): Promise<void> {
   const headers = await getAuthHeadersForSessionRequest(false);
   const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/finish`, {
