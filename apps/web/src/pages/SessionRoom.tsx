@@ -338,13 +338,19 @@ export default function SessionRoom() {
       {opponents.length > 0 && (
         <div className="flex flex-col gap-sm mb-md opponents-container">
           {opponents.map((opp) => {
-            const prog = progressByUser[opp.userId];
+            const progress = progressByUser[opp.userId];
+            const resultSummary =
+              opp.status === "finished" && opp.moves != null && opp.timeMs != null
+                ? `finished · ${opp.moves} moves · ${(opp.timeMs / 1000).toFixed(1)}s`
+                : progress
+                  ? `${progress.moves} moves · ${(progress.timeMs / 1000).toFixed(1)}s`
+                : onlineSet.has(opp.userId)
+                  ? "playing"
+                  : "playing · offline";
             return (
               <div key={opp.userId} className="opponent-bar">
                 <strong>{opp.nickname ?? opp.userId}</strong>
-                {prog
-                  ? ` · ${prog.moves} moves · ${(prog.timeMs / 1000).toFixed(1)}s`
-                  : " · no progress yet"}
+                {` · ${resultSummary}`}
               </div>
             );
           })}

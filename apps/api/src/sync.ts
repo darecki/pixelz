@@ -11,6 +11,7 @@ import { sql } from "./db.js";
 import type { SyncAuth } from "./auth.js";
 import { ENV } from "./env.js";
 import { getOrCreateAppUserId } from "./users.js";
+import { validatePixelzCompletion } from "./pixelzValidation.js";
 
 /** Exported for unit tests. */
 export function validateScore(
@@ -85,6 +86,7 @@ export async function handleSync(c: Context): Promise<Response> {
 
 const NICKNAME_TAKEN_REASON = "nickname_taken";
 const ANONYMOUS_SCORE_REJECTED_REASON = "anonymous_score_rejected";
+const INVALID_PIXELZ_COMPLETION_REASON = "invalid_pixelz_completion";
 
 type ProcessResult = true | { reason: string };
 
@@ -100,7 +102,14 @@ async function processEvent(
       }
       const { levelId, score, moves, timeMs, moveSequence } = event.payload;
       if (!validateScore(score, moves, timeMs, levelId, "LEVEL_COMPLETED")) return false as ProcessResult;
-      if (moveSequence !== undefined) {
+      if (levelId.startsWith("pixelz_")) {
+        if (moveSequence === undefined) {
+          return { reason: INVALID_PIXELZ_COMPLETION_REASON };
+        }
+        if (moveSequence.length !== moves) return { reason: INVALID_PIXELZ_COMPLETION_REASON };
+        const validation = await validatePixelzCompletion(sql, levelId, moveSequence);
+        if (!validation.valid) return { reason: INVALID_PIXELZ_COMPLETION_REASON };
+      } else if (moveSequence !== undefined) {
         if (moveSequence.length !== moves) return false as ProcessResult;
         const maxColorIndex = 9;
         if (moveSequence.some((v) => v < 0 || v > maxColorIndex)) return false as ProcessResult;

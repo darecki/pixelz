@@ -601,10 +601,105 @@ describe("POST /sessions/:id/finish", () => {
     mockSql.begin.mockReset();
   });
 
+  it("rejects pixelz finish without a move sequence", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", game: "pixelz", level_id: "pixelz_level_1", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
+      [{ can_finish: true, elapsed_ms: 4321 }],
+      [{ status: "playing" }],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/finish", handleFinishSession);
+    const res = await app.request("/sessions/session-1/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ moves: 10, timeMs: 999 }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Move sequence is required for pixelz sessions" });
+  });
+
+  it("uses client time for pixelz session finishes when it is within the allowed skew", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", game: "pixelz", level_id: "pixelz_level_1", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
+      [{ can_finish: true, elapsed_ms: 4321 }],
+      [{ status: "playing" }],
+      [{ width: 7, height: 10, num_colors: 5, seed: "level-1" }],
+      [],
+      [
+        {
+          id: "player-host",
+          session_id: "session-1",
+          user_id: "host-1",
+          role: "host",
+          status: "finished",
+          score: 0,
+          moves: 10,
+          time_ms: 25,
+          move_sequence: [1, 3, 2, 1, 3, 2, 4, 0, 1, 3],
+          finished_at: "2026-03-24T10:00:05Z",
+          nickname: "Host",
+          placement: null,
+          disqualified: false,
+        },
+      ],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/finish", handleFinishSession);
+    const res = await app.request("/sessions/session-1/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        moves: 10,
+        timeMs: 25,
+        moveSequence: [1, 3, 2, 1, 3, 2, 4, 0, 1, 3],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const playerUpdate = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("set status = 'finished'"));
+    expect(playerUpdate).toBeDefined();
+    expect(playerUpdate).toContain(10);
+    expect(playerUpdate).toContain(25);
+  });
+
+  it("rejects suspiciously low pixelz client times", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", game: "pixelz", level_id: "pixelz_level_1", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
+      [{ can_finish: true, elapsed_ms: 7_500 }],
+      [{ status: "playing" }],
+      [{ width: 7, height: 10, num_colors: 5, seed: "level-1" }],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/finish", handleFinishSession);
+    const res = await app.request("/sessions/session-1/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        moves: 10,
+        timeMs: 2_000,
+        moveSequence: [1, 3, 2, 1, 3, 2, 4, 0, 1, 3],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Suspicious time difference detected" });
+  });
+
   it("keeps a disqualified reflex player from winning the session", async () => {
     const tx = makeTxMock([
       [{ id: "session-1", game: "reflex", level_id: "reflex_level_0", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
-      [{ can_finish: true }],
+      [{ can_finish: true, elapsed_ms: 100 }],
       [{ status: "playing" }],
       [],
       [
