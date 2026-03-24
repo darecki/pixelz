@@ -6,6 +6,7 @@ import {
   createSessionSchema,
   finishSessionSchema,
   computeSessionScore,
+  isPredefinedPixelzLevel,
   type CreateSessionRequest,
   type FinishSessionRequest,
   type PixelzLevelId,
@@ -81,6 +82,15 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
     };
   }
 
+  if (session.level_id && isPredefinedPixelzLevel(session.level_id)) {
+    return {
+      game: "pixelz",
+      mode: "predefined",
+      levelId: session.level_id as PixelzLevelId,
+      maxPlayers: session.max_players,
+    };
+  }
+
   if (session.level_id?.startsWith(PIXELZ_BOARD_ID_PREFIX)) {
     return {
       game: "pixelz",
@@ -97,8 +107,12 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
   if (!session.level_id) throw new Error("Missing pixelz level");
   return {
     game: "pixelz",
-    mode: "predefined",
-    levelId: session.level_id as PixelzLevelId,
+    mode: "generated",
+    settings: {
+      width: Number((session.settings?.width as number | undefined) ?? 7),
+      height: Number((session.settings?.height as number | undefined) ?? 10),
+      numColors: Number((session.settings?.numColors as number | undefined) ?? 5),
+    },
     maxPlayers: session.max_players,
   };
 }

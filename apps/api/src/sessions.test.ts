@@ -430,6 +430,46 @@ describe("POST /sessions/:id/next", () => {
     expect(boardInsert).toContain(5);
   });
 
+  it("keeps predefined pixelz rematches on the predefined level path", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "pixelz",
+        invite_code: "abc123",
+        level_id: "pixelz_level_1",
+        seed: "seed-1",
+        settings: {},
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+      [
+        { user_id: "host-1", role: "host" },
+        { user_id: "guest-1", role: "guest" },
+      ],
+      [{ id: "session-2" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const boardInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.boards"));
+    expect(boardInsert).toBeUndefined();
+    const sessionInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.game_sessions"));
+    expect(sessionInsert).toBeDefined();
+    expect(sessionInsert).toContain("pixelz_level_1");
+  });
+
   it("returns the existing successor session idempotently", async () => {
     const tx = makeTxMock([
       [{

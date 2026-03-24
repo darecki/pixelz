@@ -7,6 +7,11 @@ import { supabase } from "../lib/supabase";
 
 const PIXELZ_DEFAULTS = { width: 7, height: 10, numColors: 5 };
 
+function clampInviteMaxPlayers(value: number): number {
+  if (Number.isNaN(value)) return 2;
+  return Math.min(10, Math.max(2, Math.trunc(value)));
+}
+
 function playUrl(boardId: string): string {
   const path = `/play?game=pixelz&level=${encodeURIComponent(boardId)}`;
   return typeof window !== "undefined" ? window.location.origin + path : path;
@@ -74,7 +79,7 @@ export default function Configure() {
           game: "pixelz",
           mode: "generated",
           settings: pixelzParams,
-          maxPlayers: inviteMaxPlayers,
+          maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
         }, session.access_token);
         
         const inviteUrl = typeof window !== "undefined"
@@ -134,13 +139,13 @@ export default function Configure() {
               game: "reflex",
               mode: "predefined",
               levelId: inviteReflexLevel,
-              maxPlayers: inviteMaxPlayers,
+              maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
             }, session.access_token)
           : await createSession({
               game: "pixelz",
               mode: "generated",
               settings: pixelzParams,
-              maxPlayers: inviteMaxPlayers,
+              maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
             }, session.access_token);
 
       const inviteUrl =
@@ -242,15 +247,15 @@ export default function Configure() {
                     </button>
                     <div className="flex items-center gap-xs ml-auto">
                       <label className="text-sm font-medium">Max Players:</label>
-                      <input
-                        type="number"
-                        min={2}
-                        max={10}
-                        value={inviteMaxPlayers}
-                        onChange={(e) => setInviteMaxPlayers(Number(e.target.value) || 2)}
-                        className="input input--inline"
-                        style={{ width: 60 }}
-                      />
+              <input
+                type="number"
+                min={2}
+                max={10}
+                value={inviteMaxPlayers}
+                onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+                className="input input--inline"
+                style={{ width: 60 }}
+              />
                     </div>
                     <button
                       type="button"
@@ -327,7 +332,7 @@ export default function Configure() {
               min={2}
               max={10}
               value={inviteMaxPlayers}
-              onChange={(e) => setInviteMaxPlayers(Number(e.target.value) || 2)}
+              onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
               className="input input--inline"
               style={{ width: 60 }}
             />
