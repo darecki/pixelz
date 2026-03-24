@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import {
   handleCreateSession,
+  handleFinishSession,
   handleGetSession,
   handleGetSessionInvite,
   handleJoinSession,
@@ -274,5 +275,72 @@ describe("POST /sessions/:id/leave", () => {
     expect(issuedSql.some((q) => q.includes("delete from public.game_session_players"))).toBe(true);
     expect(issuedSql.some((q) => q.includes("set status = 'waiting'"))).toBe(true);
     expect(issuedSql.some((q) => q.includes("set status = 'joined'"))).toBe(true);
+  });
+});
+
+describe("POST /sessions/:id/finish", () => {
+  beforeEach(() => {
+    mockSql.mockReset();
+    mockSql.begin.mockReset();
+  });
+
+  it("keeps a disqualified reflex player from winning the session", async () => {
+    const tx = makeTxMock([
+      [{ id: "session-1", game: "reflex", level_id: "reflex_level_0", status: "playing", starts_at: "2026-03-24T10:00:00Z" }],
+      [{ can_finish: true }],
+      [{ status: "playing" }],
+      [],
+      [
+        {
+          id: "player-host",
+          session_id: "session-1",
+          user_id: "host-1",
+          role: "host",
+          status: "finished",
+          score: 100,
+          moves: 0,
+          time_ms: 100,
+          move_sequence: null,
+          finished_at: "2026-03-24T10:00:05Z",
+          nickname: "Host",
+          placement: null,
+          disqualified: true,
+        },
+        {
+          id: "player-guest",
+          session_id: "session-1",
+          user_id: "guest-1",
+          role: "guest",
+          status: "finished",
+          score: 450,
+          moves: 5,
+          time_ms: 450,
+          move_sequence: null,
+          finished_at: "2026-03-24T10:00:06Z",
+          nickname: "Guest",
+          placement: null,
+          disqualified: false,
+        },
+      ],
+      [],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/finish", handleFinishSession);
+    const res = await app.request("/sessions/session-1/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ moves: 0, timeMs: 100, disqualified: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const winnerUpdate = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("winner_user_id"));
+    expect(winnerUpdate).toBeDefined();
+    expect(winnerUpdate).toContain("guest-1");
   });
 });

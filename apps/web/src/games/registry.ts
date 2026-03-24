@@ -5,7 +5,7 @@ export type GameLevelType = "predefined" | "random" | "none" | "board";
 
 export type BaseSessionGameProps = {
   seed: string;
-  onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
+  onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[]; disqualified?: boolean }) => void | Promise<void>;
   onProgress?: (progress: { moves: number; timeMs: number }) => void;
 };
 

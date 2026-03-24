@@ -157,7 +157,7 @@ export default function SessionRoom() {
     }
   }
 
-  async function handleComplete(result: { moves: number; timeMs: number; moveSequence?: number[] }) {
+  async function handleComplete(result: { moves: number; timeMs: number; moveSequence?: number[]; disqualified?: boolean }) {
     if (!data) return;
     try {
       await finishSession(data.session.id, result);
@@ -243,6 +243,7 @@ export default function SessionRoom() {
                 )}
                 <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
                 <span className="badge">{p.status}</span>
+                {p.disqualified && <span className="badge">DQ</span>}
                 {p.timeMs != null && <span className="text-sm"> {(p.timeMs / 1000).toFixed(2)}s</span>}
                 {p.score != null && <span className="text-sm"> score {p.score}</span>}
               </li>

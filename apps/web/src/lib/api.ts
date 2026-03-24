@@ -25,6 +25,7 @@ export type SessionGame = "pixelz" | "reflex";
 export type SessionStatus = "waiting" | "ready" | "playing" | "finished" | "cancelled" | "abandoned";
 export type SessionPlayerStatus = "joined" | "ready" | "playing" | "finished" | "abandoned";
 export type SessionPlayerRole = "host" | "guest";
+export type SessionFinishPayload = { moves: number; timeMs: number; moveSequence?: number[]; disqualified?: boolean };
 
 export type SessionInvitePreview = {
   sessionId: string;
@@ -62,6 +63,7 @@ export type SessionResponse = {
     finishedAt: string | null;
     nickname: string | null;
     placement: number | null;
+    disqualified: boolean;
   }>;
 };
 
@@ -230,7 +232,7 @@ export async function leaveSession(sessionId: string): Promise<void> {
 
 export async function finishSession(
   sessionId: string,
-  payload: { moves: number; timeMs: number; moveSequence?: number[] }
+  payload: SessionFinishPayload
 ): Promise<void> {
   const headers = await getAuthHeadersForSessionRequest(false);
   const res = await fetch(`${API_URL}/sessions/${encodeURIComponent(sessionId)}/finish`, {

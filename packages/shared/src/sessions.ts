@@ -55,6 +55,7 @@ export const finishSessionSchema = z.object({
   moves: z.number().int().min(0),
   timeMs: z.number().int().min(0),
   moveSequence: z.array(z.number().int().min(0).max(9)).optional(),
+  disqualified: z.boolean().optional(),
 });
 
 export const SESSION = {
@@ -82,6 +83,7 @@ export type PlayerResult = {
   score: number;
   moves: number;
   timeMs: number;
+  disqualified?: boolean;
 };
 
 export function computeSessionScore(game: "pixelz" | "reflex", moves: number, timeMs: number): number {
@@ -95,5 +97,11 @@ export function comparePixelzResults(a: PlayerResult, b: PlayerResult): number {
 }
 
 export function compareReflexResults(a: PlayerResult, b: PlayerResult): number {
+  const aDisqualified = Boolean(a.disqualified);
+  const bDisqualified = Boolean(b.disqualified);
+  if (aDisqualified !== bDisqualified) return aDisqualified ? 1 : -1;
+  if (aDisqualified && bDisqualified) {
+    if (a.moves !== b.moves) return b.moves - a.moves;
+  }
   return a.timeMs - b.timeMs;
 }

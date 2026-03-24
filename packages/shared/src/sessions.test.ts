@@ -54,6 +54,7 @@ describe("finishSessionSchema", () => {
       moves: 10,
       timeMs: 5000,
       moveSequence: [1, 2, 3],
+      disqualified: false,
     });
     expect(parsed.success).toBe(true);
   });

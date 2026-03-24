@@ -6,6 +6,7 @@ import {
   createSessionSchema,
   finishSessionSchema,
   computeSessionScore,
+  type FinishSessionRequest,
 } from "@pixelz/shared";
 import { sql } from "./db.js";
 import type { ResolvedAuth } from "./auth.js";
@@ -37,6 +38,7 @@ type SessionPlayerRow = {
   finished_at: string | null;
   nickname: string | null;
   placement: number | null;
+  disqualified: boolean;
 };
 
 function getResolvedAuth(c: Context): ResolvedAuth {
@@ -70,6 +72,12 @@ function resolveAndAssignPlacements(
       if (movesDelta !== 0) return movesDelta;
       return (a.time_ms ?? Number.MAX_SAFE_INTEGER) - (b.time_ms ?? Number.MAX_SAFE_INTEGER);
     }
+    const disqualifiedDelta = Number(a.disqualified) - Number(b.disqualified);
+    if (disqualifiedDelta !== 0) return disqualifiedDelta;
+    if (a.disqualified && b.disqualified) {
+      const movesDelta = (b.moves ?? Number.MIN_SAFE_INTEGER) - (a.moves ?? Number.MIN_SAFE_INTEGER);
+      if (movesDelta !== 0) return movesDelta;
+    }
     return (a.time_ms ?? Number.MAX_SAFE_INTEGER) - (b.time_ms ?? Number.MAX_SAFE_INTEGER);
   });
 
@@ -83,7 +91,9 @@ function resolveAndAssignPlacements(
       const tie =
         game === "pixelz"
           ? current.moves === prev.moves && current.time_ms === prev.time_ms
-          : current.time_ms === prev.time_ms;
+          : current.disqualified === prev.disqualified &&
+            current.moves === prev.moves &&
+            current.time_ms === prev.time_ms;
       if (!tie) {
         currentPlacement = i + 1;
       }
@@ -93,10 +103,11 @@ function resolveAndAssignPlacements(
 
   // Determine winner_user_id
   let winnerUserId: string | null = null;
-  if (sorted.length === 1) {
+  if (sorted.length === 1 && !sorted[0].disqualified) {
     winnerUserId = sorted[0].user_id;
   } else if (sorted.length > 1) {
-    const firstPlacement = placements.filter((p) => p.placement === 1);
+    const eligibleWinnerIds = new Set(sorted.filter((player) => !player.disqualified).map((player) => player.id));
+    const firstPlacement = placements.filter((p) => p.placement === 1 && eligibleWinnerIds.has(p.id));
     if (firstPlacement.length === 1) {
       winnerUserId = sorted.find((s) => s.id === firstPlacement[0].id)?.user_id ?? null;
     }
@@ -119,7 +130,7 @@ async function getSessionWithPlayers(sessionId: string): Promise<{
   const players = await sql`
     select
       p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at, p.placement,
-      u.nickname
+      p.disqualified, u.nickname
     from public.game_session_players p
     left join public.app_users u on u.id = p.user_id
     where p.session_id = ${sessionId}::uuid
@@ -158,6 +169,7 @@ function sessionResponse(data: { session: SessionRow; players: SessionPlayerRow[
       finishedAt: p.finished_at,
       nickname: p.nickname,
       placement: p.placement,
+      disqualified: p.disqualified,
     })),
   };
 }
@@ -430,7 +442,7 @@ export async function handleFinishSession(c: Context): Promise<Response> {
   const body = await c.req.json().catch(() => ({}));
   const parsed = finishSessionSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: "Invalid request body", details: parsed.error.flatten() }, 400);
-  const { moves, timeMs, moveSequence } = parsed.data;
+  const { moves, timeMs, moveSequence, disqualified = false } = parsed.data as FinishSessionRequest;
 
   const result = await sql.begin(async (tx: any) => {
     const sessions = await tx`
@@ -472,9 +484,17 @@ export async function handleFinishSession(c: Context): Promise<Response> {
       const rounds = session.level_id
         ? REFLEX_LEVELS[session.level_id as keyof typeof REFLEX_LEVELS]
         : undefined;
-      if (rounds !== undefined && moves !== rounds) {
+      if (moveSequence !== undefined) {
+        return { error: "Move sequence is not used for reflex", status: 400 };
+      }
+      if (rounds !== undefined && disqualified && moves >= rounds) {
+        return { error: "Disqualified reflex result must end before the final round", status: 400 };
+      }
+      if (rounds !== undefined && !disqualified && moves !== rounds) {
         return { error: "Invalid moves for reflex level", status: 400 };
       }
+    } else if (disqualified) {
+      return { error: "Disqualification is only supported for reflex sessions", status: 400 };
     } else if (moveSequence !== undefined) {
       if (moveSequence.length !== moves) return { error: "Invalid move sequence length", status: 400 };
       if (moveSequence.some((value) => value < 0 || value > 9)) {
@@ -491,6 +511,7 @@ export async function handleFinishSession(c: Context): Promise<Response> {
           moves = ${moves},
           time_ms = ${timeMs},
           move_sequence = ${moveSequenceValue},
+          disqualified = ${disqualified},
           finished_at = now()
       where session_id = ${sessionId}::uuid and user_id = ${auth.appUserId}::uuid
     `;
@@ -498,7 +519,7 @@ export async function handleFinishSession(c: Context): Promise<Response> {
     const players = await tx`
       select
         p.id, p.session_id, p.user_id, p.role, p.status, p.score, p.moves, p.time_ms, p.move_sequence, p.finished_at, p.placement,
-        u.nickname
+        p.disqualified, u.nickname
       from public.game_session_players p
       left join public.app_users u on u.id = p.user_id
       where p.session_id = ${sessionId}::uuid

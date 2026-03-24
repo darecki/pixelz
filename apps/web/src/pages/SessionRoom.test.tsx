@@ -87,6 +87,7 @@ describe("SessionRoom", () => {
         finishedAt: null,
         nickname: "Host",
         placement: null,
+        disqualified: false,
       },
     ],
   };
@@ -106,6 +107,7 @@ describe("SessionRoom", () => {
         finishedAt: null,
         nickname: "Guest",
         placement: null,
+        disqualified: false,
       },
     ],
   };
