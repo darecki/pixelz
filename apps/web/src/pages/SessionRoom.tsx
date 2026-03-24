@@ -13,6 +13,8 @@ import {
 } from "../lib/api";
 import { useGameSession } from "../hooks/useGameSession";
 
+const LOBBY_POLL_INTERVAL_MS = 1000;
+
 function useNowTick(enabled: boolean) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -98,6 +100,14 @@ export default function SessionRoom() {
       beginTriggeredRef.current = false;
     }
   }, [data?.session.status]);
+
+  useEffect(() => {
+    if (!data || (data.session.status !== "waiting" && data.session.status !== "ready")) return;
+    const id = window.setInterval(() => {
+      refresh().catch(() => {});
+    }, LOBBY_POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [data, refresh]);
 
   useEffect(() => {
     return () => {
