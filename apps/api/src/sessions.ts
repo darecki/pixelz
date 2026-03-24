@@ -14,6 +14,7 @@ import {
 } from "@pixelz/shared";
 import { sql } from "./db.js";
 import type { ResolvedAuth } from "./auth.js";
+import { validatePixelzCompletion } from "./pixelzValidation.js";
 
 type SessionRow = {
   id: string;
@@ -46,6 +47,13 @@ type SessionPlayerRow = {
   placement: number | null;
   disqualified: boolean;
 };
+
+type SessionTimingRow = {
+  can_finish: boolean;
+  elapsed_ms: number;
+};
+
+const PIXELZ_CLIENT_TIME_SKEW_TOLERANCE_MS = 5_000;
 
 function getResolvedAuth(c: Context): ResolvedAuth {
   return c.get("resolvedAuth") as ResolvedAuth;
@@ -653,15 +661,18 @@ export async function handleFinishSession(c: Context): Promise<Response> {
     };
     if (session.status !== "playing") return { error: "Session is not playing", status: 409 };
 
-    const startsAtRows = await tx`
-      select now() >= starts_at as can_finish
+    const startsAtRows = await tx<SessionTimingRow>`
+      select
+        now() >= starts_at as can_finish,
+        greatest(0, floor(extract(epoch from (now() - starts_at)) * 1000))::bigint as elapsed_ms
       from public.game_sessions
       where id = ${sessionId}::uuid and starts_at is not null
       limit 1
     `;
-    if (startsAtRows.length === 0 || !(startsAtRows[0] as { can_finish: boolean }).can_finish) {
+    if (startsAtRows.length === 0 || !startsAtRows[0].can_finish) {
       return { error: "Game has not started yet", status: 409 };
     }
+    const serverElapsedMs = Number(startsAtRows[0].elapsed_ms);
 
     const meRows = await tx`
       select status from public.game_session_players
@@ -688,21 +699,32 @@ export async function handleFinishSession(c: Context): Promise<Response> {
       }
     } else if (disqualified) {
       return { error: "Disqualification is only supported for reflex sessions", status: 400 };
-    } else if (moveSequence !== undefined) {
-      if (moveSequence.length !== moves) return { error: "Invalid move sequence length", status: 400 };
-      if (moveSequence.some((value) => value < 0 || value > 9)) {
-        return { error: "Invalid move sequence values", status: 400 };
+    } else if (session.game === "pixelz") {
+      if (moveSequence === undefined) {
+        return { error: "Move sequence is required for pixelz sessions", status: 400 };
       }
+      if (moveSequence.length !== moves) return { error: "Invalid move sequence length", status: 400 };
+      const validation = await validatePixelzCompletion(tx, session.level_id ?? "", moveSequence);
+      if (!validation.valid) {
+        return { error: "Invalid pixelz completion", details: validation.reason, status: 400 };
+      }
+      if (timeMs < serverElapsedMs - PIXELZ_CLIENT_TIME_SKEW_TOLERANCE_MS) {
+        return { error: "Suspicious time difference detected", status: 400 };
+      }
+    } else {
+      return { error: "Unsupported game type", status: 400 };
     }
 
-    const score = computeSessionScore(session.game, moves, timeMs);
+    const authoritativeMoves = session.game === "pixelz" ? moveSequence!.length : moves;
+    const authoritativeTimeMs = timeMs;
+    const score = computeSessionScore(session.game, authoritativeMoves, authoritativeTimeMs);
     const moveSequenceValue = moveSequence && moveSequence.length > 0 ? moveSequence : null;
     await tx`
       update public.game_session_players
       set status = 'finished',
           score = ${score},
-          moves = ${moves},
-          time_ms = ${timeMs},
+          moves = ${authoritativeMoves},
+          time_ms = ${authoritativeTimeMs},
           move_sequence = ${moveSequenceValue},
           disqualified = ${disqualified},
           finished_at = now()
@@ -742,7 +764,12 @@ export async function handleFinishSession(c: Context): Promise<Response> {
     return { ok: true };
   });
 
-  if ("error" in result) return c.json({ error: result.error }, result.status as 400 | 403 | 404 | 409);
+  if ("error" in result) {
+    const payload = "details" in result && result.details
+      ? { error: result.error, details: result.details }
+      : { error: result.error };
+    return c.json(payload, result.status as 400 | 403 | 404 | 409);
+  }
   return c.json({ ok: true });
 }
 
