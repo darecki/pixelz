@@ -159,11 +159,12 @@ export default function SessionRoom() {
     try {
       await leaveSession(data.session.id);
       if (isTerminalSession && currentPlayer?.role === "host" && !data.session.nextSessionId) {
-        await broadcast("party_closed", { sessionId: data.session.id });
+        void broadcast("party_closed", { sessionId: data.session.id }).catch(() => {});
       }
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to leave session");
+    } finally {
       setWorking(false);
     }
   }
@@ -184,8 +185,8 @@ export default function SessionRoom() {
     setWorking(true);
     try {
       const created = await createNextSession(data.session.id);
-      await broadcast("next_game_created", { nextSessionId: created.sessionId });
       navigate(`/session/${encodeURIComponent(created.sessionId)}`);
+      void broadcast("next_game_created", { nextSessionId: created.sessionId }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create next session");
     } finally {

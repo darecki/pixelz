@@ -246,16 +246,17 @@ export default function Configure() {
                       {pixelzCreating ? "Creating…" : "Generate & Play"}
                     </button>
                     <div className="flex items-center gap-xs ml-auto">
-                      <label className="text-sm font-medium">Max Players:</label>
-              <input
-                type="number"
-                min={2}
-                max={10}
-                value={inviteMaxPlayers}
-                onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
-                className="input input--inline"
-                style={{ width: 60 }}
-              />
+                      <label className="text-sm font-medium" htmlFor="custom-invite-max-players">Max Players:</label>
+                      <input
+                        id="custom-invite-max-players"
+                        type="number"
+                        min={2}
+                        max={10}
+                        value={inviteMaxPlayers}
+                        onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+                        className="input input--inline"
+                        style={{ width: 60 }}
+                      />
                     </div>
                     <button
                       type="button"
@@ -325,18 +326,19 @@ export default function Configure() {
       <section className="config-section">
         <h3 className="section-title">Multiplayer Challenge</h3>
         <div className="config-row">
-          <label className="text-sm">
+          <label className="text-sm" htmlFor="invite-max-players">
             Max Players:{" "}
-            <input
-              type="number"
-              min={2}
-              max={10}
-              value={inviteMaxPlayers}
-              onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
-              className="input input--inline"
-              style={{ width: 60 }}
-            />
           </label>
+          <input
+            id="invite-max-players"
+            type="number"
+            min={2}
+            max={10}
+            value={inviteMaxPlayers}
+            onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+            className="input input--inline"
+            style={{ width: 60 }}
+          />
           {selectedGame?.id === "reflex" && (
             <label className="text-sm">
               Level:{" "}

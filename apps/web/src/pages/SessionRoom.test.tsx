@@ -258,6 +258,44 @@ describe("SessionRoom", () => {
     expect(joinSession).not.toHaveBeenCalled();
   });
 
+  it("still navigates to the next session when the next_game_created broadcast fails", async () => {
+    const broadcast = vi.fn().mockRejectedValue(new Error("socket offline"));
+    useGameSession.mockReturnValue({
+      progressByUser: {},
+      onlineSet: new Set<string>(),
+      broadcast,
+      broadcastProgress: vi.fn().mockResolvedValue(undefined),
+    });
+    fetchSession
+      .mockResolvedValueOnce(makeResponse({
+        status: "finished",
+        finishedAt: "2026-03-24T10:00:00Z",
+      }))
+      .mockResolvedValueOnce(makeResponse({
+        id: "next-session",
+        inviteCode: "next123",
+      }));
+
+    renderSessionRoom();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Play Next Game" }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createNextSession).toHaveBeenCalledWith("session-1");
+    expect(broadcast).toHaveBeenCalledWith("next_game_created", { nextSessionId: "next-session" });
+    expect(screen.getByTestId("location")).toHaveTextContent("/session/next-session");
+    expect(screen.queryByText("Failed to create next session")).not.toBeInTheDocument();
+  });
+
   it("calls leaveSession when the host leaves from the results screen", async () => {
     fetchSession.mockResolvedValueOnce(makeResponse({
       status: "finished",
@@ -279,6 +317,38 @@ describe("SessionRoom", () => {
 
     expect(leaveSession).toHaveBeenCalledWith("session-1");
     expect(screen.getByTestId("location")).toHaveTextContent("/");
+  });
+
+  it("still lets the host leave when the party_closed broadcast fails", async () => {
+    const broadcast = vi.fn().mockRejectedValue(new Error("socket offline"));
+    useGameSession.mockReturnValue({
+      progressByUser: {},
+      onlineSet: new Set<string>(),
+      broadcast,
+      broadcastProgress: vi.fn().mockResolvedValue(undefined),
+    });
+    fetchSession.mockResolvedValueOnce(makeResponse({
+      status: "finished",
+      finishedAt: "2026-03-24T10:00:00Z",
+    }));
+
+    renderSessionRoom();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Leave" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(leaveSession).toHaveBeenCalledWith("session-1");
+    expect(broadcast).toHaveBeenCalledWith("party_closed", { sessionId: "session-1" });
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
+    expect(screen.queryByText("Failed to leave session")).not.toBeInTheDocument();
   });
 
   it("polls a terminal session until nextSessionId appears and then redirects participants", async () => {
