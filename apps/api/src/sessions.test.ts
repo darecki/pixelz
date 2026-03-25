@@ -355,7 +355,7 @@ describe("POST /sessions/:id/next", () => {
         invite_code: "abc123",
         level_id: "reflex_level_0",
         seed: "seed-1",
-        settings: { rounds: 10 },
+        settings: { rounds: 10, seriesLength: 1, currentRound: 1, seriesWins: {} },
         status: "finished",
         max_players: 2,
         starts_at: null,
@@ -397,7 +397,7 @@ describe("POST /sessions/:id/next", () => {
         invite_code: "abc123",
         level_id: "pixelz_old",
         seed: "seed-1",
-        settings: { width: 7, height: 10, numColors: 5 },
+        settings: { width: 7, height: 10, numColors: 5, seriesLength: 1, currentRound: 1, seriesWins: {} },
         status: "finished",
         max_players: 2,
         starts_at: null,
@@ -438,7 +438,7 @@ describe("POST /sessions/:id/next", () => {
         invite_code: "abc123",
         level_id: "pixelz_level_1",
         seed: "seed-1",
-        settings: {},
+        settings: { seriesLength: 1, currentRound: 1, seriesWins: {} },
         status: "finished",
         max_players: 2,
         starts_at: null,
@@ -470,6 +470,78 @@ describe("POST /sessions/:id/next", () => {
     expect(sessionInsert).toContain("pixelz_level_1");
   });
 
+  it("carries forward best-of-3 series state into the next round", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-1",
+        game: "reflex",
+        invite_code: "abc123",
+        level_id: "reflex_level_1",
+        seed: "seed-1",
+        settings: { rounds: 10, seriesLength: 3, currentRound: 1, seriesWins: {} },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+      [
+        { user_id: "host-1", role: "host" },
+        { user_id: "guest-1", role: "guest" },
+      ],
+      [{ id: "session-2" }],
+      [],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-1/next", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const sessionInsert = tx.mock.calls.find((call) => sqlTextFromCall(call).includes("insert into public.game_sessions"));
+    expect(sessionInsert).toBeDefined();
+    expect(sessionInsert).toContainEqual(expect.objectContaining({
+      rounds: 10,
+      seriesLength: 3,
+      currentRound: 2,
+      seriesWins: { "host-1": 1 },
+    }));
+  });
+
+  it("blocks creating another session after a best-of-3 winner is decided", async () => {
+    const tx = makeTxMock([
+      [{
+        id: "session-3",
+        game: "reflex",
+        invite_code: "abc123",
+        level_id: "reflex_level_1",
+        seed: "seed-1",
+        settings: { rounds: 10, seriesLength: 3, currentRound: 2, seriesWins: { "host-1": 1 } },
+        status: "finished",
+        max_players: 2,
+        starts_at: null,
+        finished_at: "2026-03-24T10:00:00Z",
+        winner_user_id: "host-1",
+        next_session_id: null,
+      }],
+      [{ role: "host" }],
+      [],
+    ]);
+    mockSql.begin.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(tx));
+
+    const app = createAuthedApp("host-1");
+    app.post("/sessions/:id/next", handleCreateNextSession);
+    const res = await app.request("/sessions/session-3/next", { method: "POST" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "Series is already complete" });
+  });
+
   it("returns the existing successor session idempotently", async () => {
     const tx = makeTxMock([
       [{
@@ -478,7 +550,7 @@ describe("POST /sessions/:id/next", () => {
         invite_code: "abc123",
         level_id: "reflex_level_0",
         seed: "seed-1",
-        settings: { rounds: 10 },
+        settings: { rounds: 10, seriesLength: 1, currentRound: 1, seriesWins: {} },
         status: "finished",
         max_players: 2,
         starts_at: null,
@@ -509,7 +581,7 @@ describe("POST /sessions/:id/next", () => {
         invite_code: "abc123",
         level_id: "reflex_level_0",
         seed: "seed-1",
-        settings: { rounds: 10 },
+        settings: { rounds: 10, seriesLength: 1, currentRound: 1, seriesWins: {} },
         status: "finished",
         max_players: 2,
         starts_at: null,

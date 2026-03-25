@@ -248,6 +248,7 @@ export default function Leaderboard() {
         <h2>Leaderboard</h2>
         <p>
           {getLeaderboardWindowLabel(windowKey)} view for {game === "pixelz" ? "Pixelz" : "Reflex"}.
+          {windowKey !== "all" ? " Resets on a shared UTC boundary." : ""}
           {scope === "rivals" ? " Showing only your starred rivals and your own runs." : ""}
         </p>
       </div>

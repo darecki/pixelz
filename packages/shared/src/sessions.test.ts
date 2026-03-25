@@ -16,6 +16,7 @@ describe("createSessionSchema", () => {
       game: "pixelz",
       mode: "generated",
       settings: { width: 7, height: 10, numColors: 5 },
+      seriesLength: 3,
     });
     expect(parsed.success).toBe(true);
   });
@@ -34,8 +35,19 @@ describe("createSessionSchema", () => {
       game: "reflex",
       mode: "predefined",
       levelId: "reflex_level_1",
+      seriesLength: 1,
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("rejects unsupported series length", () => {
+    const parsed = createSessionSchema.safeParse({
+      game: "reflex",
+      mode: "predefined",
+      levelId: "reflex_level_1",
+      seriesLength: 5,
+    });
+    expect(parsed.success).toBe(false);
   });
 
   it("rejects invalid reflex level id", () => {

@@ -36,6 +36,9 @@ type BoardSettings = {
   width?: number;
   height?: number;
   numColors?: number;
+  seriesLength?: number;
+  currentRound?: number;
+  seriesWins?: Record<string, number>;
 };
 
 type RecordCompetitionResultInput = {
@@ -141,21 +144,21 @@ function writeState(state: CompetitionState) {
 }
 
 function dayOfYear(date: Date): number {
-  const start = new Date(date.getFullYear(), 0, 0);
+  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 0));
   const diff = date.getTime() - start.getTime();
   return Math.floor(diff / 86_400_000);
 }
 
 function addDays(dateKey: string, delta: number): string {
-  const date = new Date(`${dateKey}T12:00:00`);
-  date.setDate(date.getDate() + delta);
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
   return toDateKey(date);
 }
 
 export function toDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -171,9 +174,9 @@ export function formatCountdown(ms: number): string {
 export function getLeaderboardWindowStart(window: LeaderboardWindow, now = new Date()): Date | null {
   if (window === "all") return null;
   const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);
   if (window === "week") {
-    start.setDate(start.getDate() - 6);
+    start.setUTCDate(start.getUTCDate() - 6);
   }
   return start;
 }
@@ -208,7 +211,7 @@ export function getDailyChallenge(gameId: GameId, now = new Date()): DailyChalle
 
 export function getDailyChallenges(now = new Date()) {
   const tomorrow = new Date(now);
-  tomorrow.setHours(24, 0, 0, 0);
+  tomorrow.setUTCHours(24, 0, 0, 0);
   return {
     dateKey: toDateKey(now),
     resetInMs: tomorrow.getTime() - now.getTime(),
@@ -263,9 +266,15 @@ export function getCompetitionOverview(now = new Date()) {
     .filter(([, games]) => games.length > 0)
     .map(([dateKey]) => dateKey)
     .sort();
+  const completedDateSet = new Set(completedDates);
   let streak = 0;
   let cursor = toDateKey(now);
-  while (completedDates.includes(cursor)) {
+
+  if (!completedDateSet.has(cursor)) {
+    cursor = addDays(cursor, -1);
+  }
+
+  while (completedDateSet.has(cursor)) {
     streak += 1;
     cursor = addDays(cursor, -1);
   }
@@ -310,14 +319,47 @@ export function formatBoardLabel(levelId: string, settings?: BoardSettings): str
 }
 
 export function describeSessionFormat(gameId: GameId, levelId: string | null, settings?: BoardSettings): string {
+  const seriesLabel = settings?.seriesLength === 3 ? " · best of 3" : "";
   if (gameId === "reflex") {
     const rounds = levelId ? REFLEX_LEVELS[levelId as ReflexLevelId] : Number(settings?.height ?? 10);
-    return `${rounds} round duel`;
+    return `${rounds} round duel${seriesLabel}`;
   }
   if (levelId && isPredefinedPixelzLevel(levelId)) {
-    return `${PIXELZ_LEVELS[levelId as PixelzLevelId]} official board`;
+    return `${PIXELZ_LEVELS[levelId as PixelzLevelId]} official board${seriesLabel}`;
   }
-  return formatBoardLabel(levelId ?? "pixelz_custom", settings);
+  return `${formatBoardLabel(levelId ?? "pixelz_custom", settings)}${seriesLabel}`;
+}
+
+export function getSeriesMeta(
+  settings?: BoardSettings,
+  winnerUserId?: string | null
+): { length: 1 | 3; round: number; wins: Record<string, number>; targetWins: number; isBestOfThree: boolean; decided: boolean } {
+  const length = settings?.seriesLength === 3 ? 3 : 1;
+  if (length === 1) {
+    return {
+      length: 1,
+      round: 1,
+      wins: {},
+      targetWins: 1,
+      isBestOfThree: false,
+      decided: false,
+    };
+  }
+  const round = Math.max(1, Math.trunc(settings?.currentRound ?? 1));
+  const wins = { ...(settings?.seriesWins ?? {}) };
+  if (winnerUserId) {
+    wins[winnerUserId] = (wins[winnerUserId] ?? 0) + 1;
+  }
+  const targetWins = length === 3 ? 2 : 1;
+  const decided = Object.values(wins).some((value) => value >= targetWins) || Boolean(winnerUserId && round >= length);
+  return {
+    length,
+    round,
+    wins,
+    targetWins,
+    isBestOfThree: length === 3,
+    decided,
+  };
 }
 
 export function formatPerformanceDelta(
@@ -339,7 +381,7 @@ export function formatPerformanceDelta(
 }
 
 export function getLeaderboardWindowLabel(window: LeaderboardWindow): string {
-  if (window === "day") return "Daily";
-  if (window === "week") return "Weekly";
+  if (window === "day") return "Daily (UTC)";
+  if (window === "week") return "Weekly (UTC)";
   return "All Time";
 }

@@ -28,6 +28,15 @@ function timeout(ms: number): Promise<never> {
   });
 }
 
+function getUtcWindowStart(window: "day" | "week", now = new Date()): Date {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  if (window === "week") {
+    start.setUTCDate(start.getUTCDate() - 6);
+  }
+  return start;
+}
+
 export async function handleLeaderboard(c: Context): Promise<Response> {
   const levelId = c.req.param("levelId");
   const windowParam = c.req.query("window");
@@ -42,6 +51,7 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
     const parsed = new Date(sinceParam);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   })();
+  const effectiveSince = since ?? (window === "day" || window === "week" ? getUtcWindowStart(window) : null);
 
   let currentUserId: string | null = null;
 
@@ -65,13 +75,9 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
 
   try {
     const timeFilter =
-      since != null
-        ? sql`and s.created_at >= ${since}`
-        : window === "day"
-          ? sql`and s.created_at >= now() - interval '1 day'`
-          : window === "week"
-            ? sql`and s.created_at >= now() - interval '7 days'`
-            : sql``;
+      effectiveSince != null
+        ? sql`and s.created_at >= ${effectiveSince}`
+        : sql``;
     const orderBy = isReflex
       ? sql`s.score asc, s.time_ms asc`
       : sql`s.moves asc, s.time_ms asc`;

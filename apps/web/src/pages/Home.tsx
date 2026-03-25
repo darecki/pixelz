@@ -8,6 +8,7 @@ import {
   getLeaderboardWindowStart,
   getLevelProgress,
   getQuickPlayLevel,
+  toDateKey,
   type GameId,
 } from "../lib/competition";
 import ReflexPreviewFrame from "../components/ReflexPreviewFrame";
@@ -58,7 +59,16 @@ export default function Home() {
   const [dailyLoading, setDailyLoading] = useState(true);
   const [overview, setOverview] = useState(() => getCompetitionOverview());
 
+  const dailyDateKey = useMemo(() => toDateKey(now), [now]);
   const daily = useMemo(() => getDailyChallenges(now), [now]);
+  const dailyChallenges = useMemo(
+    () => getDailyChallenges(new Date(`${dailyDateKey}T12:00:00Z`)).challenges,
+    [dailyDateKey]
+  );
+  const dailyWindowStartIso = useMemo(
+    () => getLeaderboardWindowStart("day", new Date(`${dailyDateKey}T12:00:00Z`))?.toISOString() ?? null,
+    [dailyDateKey]
+  );
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -67,15 +77,14 @@ export default function Home() {
 
   useEffect(() => {
     setOverview(getCompetitionOverview());
-  }, []);
+  }, [dailyDateKey]);
 
   useEffect(() => {
     let cancelled = false;
     setDailyLoading(true);
     Promise.all(
-      daily.challenges.map(async (challenge) => {
-        const dayStart = getLeaderboardWindowStart("day", now)?.toISOString();
-        const data = await fetchLeaderboard(challenge.levelId, undefined, undefined, "day", dayStart).catch(() => ({
+      dailyChallenges.map(async (challenge) => {
+        const data = await fetchLeaderboard(challenge.levelId, undefined, undefined, "day", dailyWindowStartIso).catch(() => ({
           entries: [],
         }));
         const formatted = formatDailyLeader(challenge.gameId, data.entries[0]);
@@ -100,7 +109,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [daily, now]);
+  }, [dailyChallenges, dailyWindowStartIso]);
 
   return (
     <div className="page-container page-container--wide home-dashboard">
@@ -124,13 +133,13 @@ export default function Home() {
           <div className="hero-stat-card">
             <span className="hero-stat-label">Daily Reset</span>
             <strong>{formatCountdown(daily.resetInMs)}</strong>
-            <span className="text-muted text-sm">Fresh challenge at local midnight</span>
+            <span className="text-muted text-sm">Fresh global board at 00:00 UTC</span>
           </div>
           <div className="hero-stat-card">
             <span className="hero-stat-label">Current Streak</span>
             <strong>{overview.streak} day{overview.streak === 1 ? "" : "s"}</strong>
             <span className="text-muted text-sm">
-              {overview.completedToday.length > 0 ? "Today is locked in" : "Finish a daily run to keep it alive"}
+              {overview.completedToday.length > 0 ? "This UTC cycle is locked in" : "Finish a daily run before the UTC reset"}
             </span>
           </div>
           <div className="hero-stat-card">
@@ -145,7 +154,7 @@ export default function Home() {
         <div className="section-heading-row">
           <div>
             <p className="section-kicker">Daily Challenge</p>
-            <h2>One board, one reset, one reason to come back</h2>
+            <h2>One global board, one UTC reset, one reason to come back</h2>
           </div>
           <Link to="/leaderboard" className="btn btn-sm">
             Open Leaderboards
@@ -153,7 +162,7 @@ export default function Home() {
         </div>
 
         <div className="daily-grid">
-          {daily.challenges.map((challenge) => {
+          {dailyChallenges.map((challenge) => {
             const gameCopy = GAME_COPY[challenge.gameId];
             const stats = dailyStats[challenge.gameId];
             const progress = getLevelProgress(challenge.gameId, challenge.levelId);
@@ -169,17 +178,17 @@ export default function Home() {
                     <p className="game-card-desc">{challenge.subtitle}</p>
                   </div>
                   <span className={`status-pill ${completedToday ? "status-pill--success" : ""}`}>
-                    {completedToday ? "Completed today" : "Open now"}
+                    {completedToday ? "Completed this cycle" : "Live now"}
                   </span>
                 </div>
 
                 <div className="daily-card-metrics">
                   <div className="metric-chip">
-                    <span>Players today</span>
+                    <span>Players today (UTC)</span>
                     <strong>{dailyLoading ? "..." : stats.entries}</strong>
                   </div>
                   <div className="metric-chip">
-                    <span>Top today</span>
+                    <span>Top today (UTC)</span>
                     <strong>{dailyLoading ? "..." : stats.bestLine ?? "No scores yet"}</strong>
                   </div>
                   <div className="metric-chip">
@@ -196,7 +205,7 @@ export default function Home() {
 
                 <div className="daily-card-footer">
                   <p className="text-muted text-sm">
-                    {stats.leader ? `Leader: ${stats.leader}` : "Be the first score on the board today."}
+                    {stats.leader ? `Leader: ${stats.leader}` : "Be the first score on the global board today."}
                   </p>
                   <div className="daily-card-actions">
                     <Link

@@ -11,7 +11,7 @@ import {
   type SessionResponse,
 } from "../lib/api";
 import { useGameSession } from "../hooks/useGameSession";
-import { describeSessionFormat, formatBoardLabel } from "../lib/competition";
+import { describeSessionFormat, formatBoardLabel, getSeriesMeta } from "../lib/competition";
 
 const LOBBY_POLL_INTERVAL_MS = 1000;
 
@@ -207,9 +207,16 @@ export default function SessionRoom() {
   const settings = data.session.settings as { width?: number; height?: number; numColors?: number; rounds?: number };
   const stakesLabel = describeSessionFormat(data.session.game, data.session.levelId, settings);
   const boardLabel = data.session.levelId ? formatBoardLabel(data.session.levelId, settings) : "Custom format";
+  const seriesMeta = getSeriesMeta(settings, isTerminalSession ? data.session.winnerId : null);
+  const nextRoundLabel =
+    seriesMeta.length === 3
+      ? seriesMeta.round + 1 === 3
+        ? "Play Decider"
+        : `Play Round ${seriesMeta.round + 1}`
+      : "Play Next Game";
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
-    const canCreateNextSession = me?.role === "host";
+    const canCreateNextSession = me?.role === "host" && !seriesMeta.decided;
     const sortedPlayers = [...data.players].sort((a, b) => {
       if (a.placement != null && b.placement != null) return a.placement - b.placement;
       if (a.placement != null) return -1;
@@ -237,10 +244,28 @@ export default function SessionRoom() {
               <strong>{stakesLabel}</strong>
             </div>
             <div className="metric-chip">
+              <span>Series</span>
+              <strong>
+                {seriesMeta.length === 3
+                  ? `Round ${seriesMeta.round} of 3`
+                  : "Single match"}
+              </strong>
+            </div>
+            <div className="metric-chip">
               <span>Players</span>
               <strong>{data.players.length} / {data.session.maxPlayers}</strong>
             </div>
           </div>
+          {seriesMeta.length === 3 && (
+            <div className="metric-chip-row mb-md">
+              {sortedPlayers.map((player) => (
+                <div key={player.userId} className="metric-chip">
+                  <span>{player.nickname ?? player.userId}</span>
+                  <strong>{seriesMeta.wins[player.userId] ?? 0} wins</strong>
+                </div>
+              ))}
+            </div>
+          )}
           <ul className="lobby-players">
             {sortedPlayers.map((p) => (
               <li key={p.userId} className="lobby-player lobby-player--result">
@@ -260,8 +285,10 @@ export default function SessionRoom() {
           <div className="flex gap-sm">
             {canCreateNextSession ? (
               <button type="button" onClick={handlePlayNextGame} disabled={working} className="btn btn-primary">
-                Play Next Game
+                {nextRoundLabel}
               </button>
+            ) : seriesMeta.length === 3 && seriesMeta.decided ? (
+              <span className="text-muted">Series complete. Start a fresh match to run it back.</span>
             ) : data.session.partyEndedAt ? (
               <span className="text-muted">The host ended the party.</span>
             ) : (
@@ -301,6 +328,10 @@ export default function SessionRoom() {
             <div className="metric-chip">
               <span>Format</span>
               <strong>{stakesLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Series</span>
+              <strong>{seriesMeta.length === 3 ? `Round ${seriesMeta.round} of 3` : "Single match"}</strong>
             </div>
             <div className="metric-chip">
               <span>Players</span>
@@ -394,6 +425,10 @@ export default function SessionRoom() {
             <div className="metric-chip">
               <span>Format</span>
               <strong>{stakesLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Series</span>
+              <strong>{seriesMeta.length === 3 ? `Round ${seriesMeta.round} of 3` : "Single match"}</strong>
             </div>
             <div className="metric-chip">
               <span>Your status</span>

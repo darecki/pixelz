@@ -70,9 +70,9 @@ export type SessionResponse = {
 };
 
 export type CreateSessionRequest =
-  | { game: "pixelz"; mode: "predefined"; levelId: string; maxPlayers?: number }
-  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number }; maxPlayers?: number }
-  | { game: "reflex"; mode: "predefined"; levelId: string; maxPlayers?: number };
+  | { game: "pixelz"; mode: "predefined"; levelId: string; maxPlayers?: number; seriesLength?: 1 | 3 }
+  | { game: "pixelz"; mode: "generated"; settings: { width: number; height: number; numColors: number }; maxPlayers?: number; seriesLength?: 1 | 3 }
+  | { game: "reflex"; mode: "predefined"; levelId: string; maxPlayers?: number; seriesLength?: 1 | 3 };
 
 export type CreateSessionResponse = { sessionId: string; inviteCode: string };
 

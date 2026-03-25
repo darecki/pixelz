@@ -48,6 +48,7 @@ export default function Configure() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteReflexLevel, setInviteReflexLevel] = useState<string>("reflex_level_1");
   const [inviteMaxPlayers, setInviteMaxPlayers] = useState(2);
+  const [seriesLength, setSeriesLength] = useState<1 | 3>(1);
 
   const selectedGame = GAMES.find((g) => g.id === gameId);
   const activeMode = searchParams.get("mode") === "multi" ? "multi" : "solo";
@@ -142,6 +143,7 @@ export default function Configure() {
             mode: "generated",
             settings: pixelzParams,
             maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
+            seriesLength,
           },
           accessToken
         )
@@ -174,6 +176,7 @@ export default function Configure() {
             mode: "predefined",
             levelId,
             maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
+            seriesLength,
           },
           accessToken
         )
@@ -198,6 +201,7 @@ export default function Configure() {
             mode: "predefined",
             levelId: inviteReflexLevel,
             maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
+            seriesLength,
           },
           accessToken
         )
@@ -252,12 +256,13 @@ export default function Configure() {
             <p className="section-kicker">Daily Challenge</p>
             <h3>{dailyChallenge.label}</h3>
             <p className="text-secondary">{dailyChallenge.subtitle}</p>
+            <p className="text-muted text-sm">Shared worldwide board. Resets at 00:00 UTC.</p>
           </div>
           <Link
             to={`/play?game=${selectedGame.id}&level=${encodeURIComponent(dailyChallenge.levelId)}&daily=1`}
             className="btn btn-primary"
           >
-            Play Today’s Run
+            Play Global Daily
           </Link>
         </div>
       )}
@@ -428,7 +433,7 @@ export default function Configure() {
           <div className="card multiplayer-summary-card">
             <div className="metric-chip">
               <span>Format</span>
-              <strong>Casual invite</strong>
+              <strong>{seriesLength === 3 ? "Best of 3" : "Single match"}</strong>
             </div>
             <div className="metric-chip">
               <span>Players</span>
@@ -454,6 +459,22 @@ export default function Configure() {
               className="input input--inline"
               style={{ width: 72 }}
             />
+            <div className="btn-group">
+              <button
+                type="button"
+                onClick={() => setSeriesLength(1)}
+                className={`btn-toggle ${seriesLength === 1 ? "btn-toggle--active" : ""}`}
+              >
+                Single Match
+              </button>
+              <button
+                type="button"
+                onClick={() => setSeriesLength(3)}
+                className={`btn-toggle ${seriesLength === 3 ? "btn-toggle--active" : ""}`}
+              >
+                Best of 3
+              </button>
+            </div>
           </div>
 
           {selectedGame.id === "reflex" ? (

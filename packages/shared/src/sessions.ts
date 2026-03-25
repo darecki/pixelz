@@ -23,6 +23,8 @@ export const pixelzSessionSettingsSchema = z.object({
   numColors: z.number().int().min(2).max(10).default(5),
 });
 
+const seriesLengthSchema = z.union([z.literal(1), z.literal(3)]);
+
 export const reflexSessionSettingsSchema = z.object({
   rounds: z.number().int().min(1).max(50),
 });
@@ -34,6 +36,7 @@ export const createSessionSchema = z.union([
     levelId: pixelzLevelIdSchema,
     settings: z.undefined().optional(),
     maxPlayers: z.number().int().min(2).max(10).optional(),
+    seriesLength: seriesLengthSchema.optional(),
   }),
   z.object({
     game: z.literal("pixelz"),
@@ -41,6 +44,7 @@ export const createSessionSchema = z.union([
     levelId: z.undefined().optional(),
     settings: pixelzSessionSettingsSchema,
     maxPlayers: z.number().int().min(2).max(10).optional(),
+    seriesLength: seriesLengthSchema.optional(),
   }),
   z.object({
     game: z.literal("reflex"),
@@ -48,6 +52,7 @@ export const createSessionSchema = z.union([
     levelId: reflexLevelIdSchema,
     settings: z.undefined().optional(),
     maxPlayers: z.number().int().min(2).max(10).optional(),
+    seriesLength: seriesLengthSchema.optional(),
   }),
 ]);
 
