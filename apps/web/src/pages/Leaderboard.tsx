@@ -265,7 +265,7 @@ export default function Leaderboard() {
   const highlightedLatestKey = latestMine ? `${latestMine.userId}-${latestMine.createdAt}` : null;
   const highlightedBestKey = bestMine ? `${bestMine.userId}-${bestMine.createdAt}` : null;
   const podium = visibleEntries.slice(0, 3);
-  const percentile = bestMine ? Math.max(1, Math.round((1 - (bestMine.rank - 1) / Math.max(data.entries.length, 1)) * 100)) : null;
+  const percentile = bestMine ? Math.max(1, Math.round((bestMine.rank / Math.max(data.entries.length, 1)) * 100)) : null;
   const rivalSummary = getRivalChallengeSummary(
     game,
     bestMine ? { moves: bestMine.moves, timeMs: bestMine.timeMs } : null,
@@ -390,13 +390,19 @@ export default function Leaderboard() {
             </>
           )}
           <div className="leaderboard-actions">
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href).catch(() => {});
-              }}
-              className="btn btn-sm"
-            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator?.clipboard?.writeText) {
+                    try {
+                      navigator.clipboard.writeText(window.location.href).catch(() => {});
+                    } catch {
+                      // Ignore clipboard write failures in unsupported contexts.
+                    }
+                  }
+                }}
+                className="btn btn-sm"
+              >
               Share view
             </button>
             {isPixelz && (

@@ -117,17 +117,18 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     sessionStorage.removeItem("pixelz_pending_score");
     scoreSubmittedRef.current = false;
     deterministicSequenceRef.current = [];
-    setLevelProgress(getLevelProgress("reflex", levelId));
+    const nextLevelProgress = getLevelProgress("reflex", levelId);
+    setLevelProgress(nextLevelProgress);
     setResultInsight({ projectedRank: null, nextTarget: null });
     setLastResultWasBest(null);
     setLastSplitMs(null);
     setRivalInsight(null);
-    setGhostTarget(personalBest ? { label: "PB ghost", timeMs: personalBest.timeMs } : null);
+    setGhostTarget(nextLevelProgress ? { label: "PB ghost", timeMs: nextLevelProgress.bestTimeMs } : null);
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
       if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
     };
-  }, [levelId, personalBest?.timeMs]);
+  }, [levelId]);
 
   useEffect(() => {
     if (personalBest) return;
@@ -521,7 +522,13 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             type="button"
             onClick={(e) => {
               const url = typeof window !== "undefined" ? `${window.location.origin}/play?game=reflex&level=${encodeURIComponent(levelId)}` : "";
-              navigator.clipboard.writeText(url).catch(() => {});
+              if (navigator?.clipboard?.writeText) {
+                try {
+                  navigator.clipboard.writeText(url).catch(() => {});
+                } catch {
+                  // Ignore clipboard write failures in unsupported contexts.
+                }
+              }
               const btn = e.currentTarget;
               const original = btn.innerText;
               btn.innerText = "Copied!";

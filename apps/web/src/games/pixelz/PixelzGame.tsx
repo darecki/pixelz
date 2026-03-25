@@ -389,7 +389,13 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             type="button"
             onClick={(e) => {
               const url = typeof window !== "undefined" ? `${window.location.origin}/play?game=pixelz&level=${encodeURIComponent(levelId)}` : "";
-              navigator.clipboard.writeText(url).catch(() => {});
+              if (navigator?.clipboard?.writeText) {
+                try {
+                  navigator.clipboard.writeText(url).catch(() => {});
+                } catch {
+                  // Ignore clipboard write failures in unsupported contexts.
+                }
+              }
               const btn = e.currentTarget;
               const original = btn.innerText;
               btn.innerText = "Copied!";
