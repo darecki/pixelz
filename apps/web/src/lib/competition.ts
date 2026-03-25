@@ -182,14 +182,92 @@ function levelKey(gameId: GameId, levelId: string): string {
   return `${gameId}:${levelId}`;
 }
 
+function parseStoredLevelKey(key: string): { gameId: GameId; levelId: string } | null {
+  if (key.startsWith("pixelz:")) {
+    const levelId = key.slice("pixelz:".length);
+    return levelId ? { gameId: "pixelz", levelId } : null;
+  }
+  if (key.startsWith("reflex:")) {
+    const levelId = key.slice("reflex:".length);
+    return levelId ? { gameId: "reflex", levelId } : null;
+  }
+  return null;
+}
+
+function toStoredNonNegativeInt(value: unknown): number | null {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.trunc(numeric));
+}
+
+function toStoredIsoString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function normalizeLevelProgress(value: unknown): LevelProgress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Partial<LevelProgress>;
+  const bestMoves = toStoredNonNegativeInt(raw.bestMoves);
+  const bestTimeMs = toStoredNonNegativeInt(raw.bestTimeMs);
+  const lastMoves = toStoredNonNegativeInt(raw.lastMoves);
+  const lastTimeMs = toStoredNonNegativeInt(raw.lastTimeMs);
+  const plays = toStoredNonNegativeInt(raw.plays);
+  const lastPlayedAt = toStoredIsoString(raw.lastPlayedAt);
+
+  if (
+    bestMoves == null ||
+    bestTimeMs == null ||
+    lastMoves == null ||
+    lastTimeMs == null ||
+    plays == null ||
+    lastPlayedAt == null
+  ) {
+    return null;
+  }
+
+  return {
+    bestMoves,
+    bestTimeMs,
+    lastMoves,
+    lastTimeMs,
+    plays,
+    lastPlayedAt,
+  };
+}
+
+function isValidDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && toDateKey(parsed) === value;
+}
+
 function normalizeState(value: unknown): CompetitionState {
   if (!value || typeof value !== "object") return createDefaultState();
   const raw = value as Partial<CompetitionState>;
+  const rawLevels = raw.levels && typeof raw.levels === "object" ? raw.levels : {};
+  const rawDailyCompletions =
+    raw.dailyCompletions && typeof raw.dailyCompletions === "object" ? raw.dailyCompletions : {};
+  const levels = Object.fromEntries(
+    Object.entries(rawLevels).flatMap(([key, levelValue]) => {
+      if (parseStoredLevelKey(key) == null) return [];
+      const normalized = normalizeLevelProgress(levelValue);
+      return normalized ? [[key, normalized] as const] : [];
+    })
+  );
+  const dailyCompletions = Object.fromEntries(
+    Object.entries(rawDailyCompletions).flatMap(([dateKey, games]) => {
+      if (!isValidDateKey(dateKey) || !Array.isArray(games)) return [];
+      const validGames = Array.from(new Set(games.filter((game): game is GameId => game === "pixelz" || game === "reflex")));
+      return validGames.length > 0 ? [[dateKey, validGames] as const] : [];
+    })
+  );
   return {
     version: 1,
-    levels: raw.levels && typeof raw.levels === "object" ? raw.levels : {},
-    dailyCompletions:
-      raw.dailyCompletions && typeof raw.dailyCompletions === "object" ? raw.dailyCompletions : {},
+    levels,
+    dailyCompletions,
     rivals: Array.isArray(raw.rivals) ? raw.rivals.filter((id): id is string => typeof id === "string") : [],
   };
 }

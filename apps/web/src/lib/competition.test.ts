@@ -142,6 +142,53 @@ describe("competition UTC daily helpers", () => {
     expect(formatPerformanceDelta("pixelz", { moves: 12, timeMs: 12345 }, { moves: 12, timeMs: 12345 })).toBe("exactly tied");
   });
 
+  it("sanitizes corrupted stored competition state without dropping valid custom boards", () => {
+    storage["pixelz_competition_state_v1"] = JSON.stringify({
+      levels: {
+        "pixelz:custom-board-123": {
+          bestMoves: "11",
+          bestTimeMs: "23456",
+          lastMoves: "12",
+          lastTimeMs: "24567",
+          plays: "3",
+          lastPlayedAt: "2026-04-03T12:00:00.000Z",
+        },
+        "pixelz:": {
+          bestMoves: 9,
+          bestTimeMs: 20000,
+          lastMoves: 10,
+          lastTimeMs: 21000,
+          plays: 1,
+          lastPlayedAt: "2026-04-02T12:00:00.000Z",
+        },
+        "reflex:reflex_level_1": {
+          bestMoves: "oops",
+          bestTimeMs: 4000,
+          lastMoves: 10,
+          lastTimeMs: 4000,
+          plays: 1,
+          lastPlayedAt: "2026-04-03T12:00:00.000Z",
+        },
+      },
+      dailyCompletions: {
+        "2026-04-03": ["pixelz", "reflex", "broken", 123],
+        "2026-99-99": ["pixelz"],
+        "2026-04-04": "pixelz",
+      },
+      rivals: ["rival-a", 42, null],
+    });
+
+    const overview = getCompetitionOverview(new Date("2026-04-03T18:00:00Z"));
+    const profile = getCompetitionProfile(new Date("2026-04-03T18:00:00Z"));
+
+    expect(overview.completedToday).toEqual(["pixelz", "reflex"]);
+    expect(profile.totalPlays).toBe(3);
+    expect(profile.pbBoards).toBe(1);
+    expect(profile.rivalsCount).toBe(1);
+    expect(profile.recentlyPlayed[0]?.gameId).toBe("pixelz");
+    expect(profile.recentlyPlayed[0]?.levelId).toBe("custom-board-123");
+  });
+
   it("aggregates a usable competition profile from local progress", () => {
     recordCompetitionResult({
       gameId: "pixelz",
