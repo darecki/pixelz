@@ -12,7 +12,10 @@ import { PIXELZ_COLORS } from "./constants";
 import {
   formatPerformanceDelta,
   getLevelProgress,
+  getRivalChallengeSummary,
+  getRivalIds,
   recordCompetitionResult,
+  type RivalChallengeSummary,
   type GameId,
 } from "../../lib/competition";
 
@@ -89,6 +92,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [resultInsight, setResultInsight] = useState<ResultInsight>({ projectedRank: null, nextTarget: null });
   const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("pixelz", levelId));
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
+  const [rivalInsight, setRivalInsight] = useState<RivalChallengeSummary | null>(null);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
   const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; moveSequence?: number[] } | null>(null);
@@ -130,6 +134,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
     setRecentlyChanged([]);
     setResultInsight({ projectedRank: null, nextTarget: null });
     setLastResultWasBest(null);
+    setRivalInsight(null);
     fetchBoard(levelId)
       .then((board) => {
         if (cancelled) return;
@@ -171,6 +176,15 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
       projectedRank,
       nextTarget: nextTarget ? { moves: nextTarget.moves, timeMs: nextTarget.timeMs, rank: nextTarget.rank } : null,
     });
+    setRivalInsight(
+      getRivalChallengeSummary(
+        "pixelz",
+        { moves: finalMoves, timeMs: elapsed },
+        leaderboard.entries,
+        getRivalIds(),
+        leaderboard.currentUserId
+      )
+    );
   }, [levelId]);
 
   const handleColorClick = useCallback(
@@ -337,7 +351,14 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
                   : "You’re leading this slice"}
               </strong>
             </div>
+            {rivalInsight && (
+              <div className="metric-chip">
+                <span>Rival race</span>
+                <strong>{rivalInsight.chipText}</strong>
+              </div>
+            )}
           </div>
+          {rivalInsight && <p className="text-muted text-sm">{rivalInsight.message}</p>}
         </div>
         {saving && <p className="loading-text text-sm">Saving…</p>}
         {!showSignInPrompt && <GameOverNickname disabled={saving} hideIfNoAuth={true} />}

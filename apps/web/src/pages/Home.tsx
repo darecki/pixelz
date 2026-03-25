@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { fetchLeaderboard } from "../lib/api";
 import {
   formatCountdown,
+  getRivalChallengeSummary,
+  getRivalIds,
   getCompetitionOverview,
   getDailyChallenges,
   getLeaderboardWindowStart,
@@ -18,6 +20,7 @@ type DailySnapshot = {
   entries: number;
   leader: string | null;
   bestLine: string | null;
+  rivalTarget: { userId: string; nickname: string | null; rank: number; moves: number; timeMs: number } | null;
 };
 
 const GAME_COPY: Record<GameId, { title: string; subtitle: string; accentClass: string; leaderboardGame: string }> = {
@@ -53,14 +56,15 @@ function formatDailyLeader(gameId: GameId, entry: { nickname: string | null; use
 export default function Home() {
   const [now, setNow] = useState(() => new Date());
   const [dailyStats, setDailyStats] = useState<Record<GameId, DailySnapshot>>({
-    pixelz: { entries: 0, leader: null, bestLine: null },
-    reflex: { entries: 0, leader: null, bestLine: null },
+    pixelz: { entries: 0, leader: null, bestLine: null, rivalTarget: null },
+    reflex: { entries: 0, leader: null, bestLine: null, rivalTarget: null },
   });
   const [dailyLoading, setDailyLoading] = useState(true);
   const [overview, setOverview] = useState(() => getCompetitionOverview());
 
   const dailyDateKey = useMemo(() => toDateKey(now), [now]);
   const daily = useMemo(() => getDailyChallenges(now), [now]);
+  const rivalIds = useMemo(() => getRivalIds(), []);
   const dailyChallenges = useMemo(
     () => getDailyChallenges(new Date(`${dailyDateKey}T12:00:00Z`)).challenges,
     [dailyDateKey]
@@ -94,6 +98,7 @@ export default function Home() {
             entries: data.entries.length,
             leader: formatted?.leader ?? null,
             bestLine: formatted?.bestLine ?? null,
+            rivalTarget: data.entries.find((entry) => rivalIds.includes(entry.userId)) ?? null,
           },
         ] as const;
       })
@@ -167,6 +172,12 @@ export default function Home() {
             const stats = dailyStats[challenge.gameId];
             const progress = getLevelProgress(challenge.gameId, challenge.levelId);
             const completedToday = overview.completedToday.includes(challenge.gameId);
+            const rivalSummary = getRivalChallengeSummary(
+              challenge.gameId,
+              progress ? { moves: progress.bestMoves, timeMs: progress.bestTimeMs } : null,
+              stats.rivalTarget ? [stats.rivalTarget] : [],
+              rivalIds
+            );
 
             return (
               <article key={challenge.gameId} className="card daily-card">
@@ -205,7 +216,11 @@ export default function Home() {
 
                 <div className="daily-card-footer">
                   <p className="text-muted text-sm">
-                    {stats.leader ? `Leader: ${stats.leader}` : "Be the first score on the global board today."}
+                    {rivalSummary
+                      ? rivalSummary.message
+                      : stats.leader
+                        ? `Leader: ${stats.leader}`
+                        : "Be the first score on the global board today."}
                   </p>
                   <div className="daily-card-actions">
                     <Link

@@ -15,6 +15,7 @@ import {
   formatPerformanceDelta,
   getLeaderboardWindowLabel,
   getLeaderboardWindowStart,
+  getRivalChallengeSummary,
   getRivalIds,
   toggleRival,
   type GameId,
@@ -239,6 +240,13 @@ export default function Leaderboard() {
   const highlightedBestKey = bestMine ? `${bestMine.userId}-${bestMine.createdAt}` : null;
   const podium = visibleEntries.slice(0, 3);
   const percentile = bestMine ? Math.max(1, Math.round((1 - (bestMine.rank - 1) / Math.max(data.entries.length, 1)) * 100)) : null;
+  const rivalSummary = getRivalChallengeSummary(
+    game,
+    bestMine ? { moves: bestMine.moves, timeMs: bestMine.timeMs } : null,
+    data.entries,
+    rivalIds,
+    data.currentUserId
+  );
   const colSpan = isPixelz ? 6 : 5;
 
   return (
@@ -419,6 +427,27 @@ export default function Leaderboard() {
                   : "Play a run to unlock your personal comparison cards."}
             </p>
           </article>
+          {rivalSummary && (
+            <article className="card personal-summary-card">
+              <p className="section-kicker">Rival Challenge</p>
+              <div className="personal-chip-row">
+                <div className="metric-chip">
+                  <span>Closest rival</span>
+                  <strong>{rivalSummary.rivalName}</strong>
+                </div>
+                <div className="metric-chip">
+                  <span>Race</span>
+                  <strong>{rivalSummary.chipText}</strong>
+                </div>
+              </div>
+              <p className="text-muted text-sm">{rivalSummary.message}</p>
+              {scope !== "rivals" && (
+                <button type="button" onClick={() => setScope("rivals")} className="btn btn-sm">
+                  Focus rival board
+                </button>
+              )}
+            </article>
+          )}
         </section>
       )}
 
@@ -461,6 +490,7 @@ export default function Leaderboard() {
                       <div className="leaderboard-user-cell">
                         <span>{displayUser(entry)}</span>
                         {data.currentUserId === entry.userId && <span className="badge">You</span>}
+                        {rivalIds.includes(entry.userId) && <span className="badge badge--accent">Rival</span>}
                         {isLatest && <span className="badge badge--accent">Latest</span>}
                         {isBest && <span className="badge badge--success">Best</span>}
                       </div>

@@ -16,6 +16,24 @@ type ResultSnapshot = {
   timeMs: number;
 };
 
+export type RivalLeaderboardEntry = {
+  userId: string;
+  nickname: string | null;
+  rank: number;
+  moves: number;
+  timeMs: number;
+};
+
+export type RivalChallengeSummary = {
+  gameId: GameId;
+  rivalUserId: string;
+  rivalName: string;
+  rank: number;
+  status: "ahead" | "behind" | "tied" | "unplayed";
+  chipText: string;
+  message: string;
+};
+
 type LevelProgress = {
   bestMoves: number;
   bestTimeMs: number;
@@ -147,6 +165,43 @@ function dayOfYear(date: Date): number {
   const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 0));
   const diff = date.getTime() - start.getTime();
   return Math.floor(diff / 86_400_000);
+}
+
+function rivalName(entry: RivalLeaderboardEntry): string {
+  return entry.nickname ?? entry.userId.slice(0, 8);
+}
+
+function formatResultLine(gameId: GameId, result: ResultSnapshot): string {
+  if (gameId === "pixelz") {
+    return `${result.moves} moves · ${(result.timeMs / 1000).toFixed(2)}s`;
+  }
+  return `${(result.timeMs / 1000).toFixed(2)}s`;
+}
+
+function getRivalGap(gameId: GameId, current: ResultSnapshot, target: ResultSnapshot) {
+  if (gameId === "pixelz" && current.moves !== target.moves) {
+    const moveDiff = current.moves - target.moves;
+    return {
+      status: moveDiff < 0 ? "ahead" : "behind",
+      text: `${Math.abs(moveDiff)} move${Math.abs(moveDiff) === 1 ? "" : "s"} ${moveDiff < 0 ? "ahead" : "behind"}`,
+      distance: Math.abs(moveDiff) * 1_000_000 + Math.abs(current.timeMs - target.timeMs),
+    } as const;
+  }
+
+  const timeDiff = current.timeMs - target.timeMs;
+  if (timeDiff === 0) {
+    return {
+      status: "tied",
+      text: "Tied",
+      distance: 0,
+    } as const;
+  }
+
+  return {
+    status: timeDiff < 0 ? "ahead" : "behind",
+    text: `${(Math.abs(timeDiff) / 1000).toFixed(2)}s ${timeDiff < 0 ? "ahead" : "behind"}`,
+    distance: Math.abs(timeDiff),
+  } as const;
 }
 
 function addDays(dateKey: string, delta: number): string {
@@ -302,6 +357,74 @@ export function toggleRival(userId: string): string[] {
   state.rivals = Array.from(next);
   writeState(state);
   return state.rivals;
+}
+
+export function getRivalChallengeSummary(
+  gameId: GameId,
+  current: ResultSnapshot | null,
+  entries: RivalLeaderboardEntry[],
+  rivalIds: string[],
+  currentUserId?: string | null
+): RivalChallengeSummary | null {
+  const rivals = entries.filter((entry) => rivalIds.includes(entry.userId) && entry.userId !== currentUserId);
+  if (rivals.length === 0) return null;
+
+  if (!current) {
+    const target = rivals[0];
+    const name = rivalName(target);
+    return {
+      gameId,
+      rivalUserId: target.userId,
+      rivalName: name,
+      rank: target.rank,
+      status: "unplayed",
+      chipText: `${name} · ${formatResultLine(gameId, target)}`,
+      message: `${name} leads your rival pack here with ${formatResultLine(gameId, target)}. Put up your first answer.`,
+    };
+  }
+
+  const closest = rivals.reduce((best, entry) => {
+    if (!best) return entry;
+    const bestGap = getRivalGap(gameId, current, best);
+    const nextGap = getRivalGap(gameId, current, entry);
+    return nextGap.distance < bestGap.distance ? entry : best;
+  }, rivals[0]);
+  const name = rivalName(closest);
+  const gap = getRivalGap(gameId, current, closest);
+
+  if (gap.status === "tied") {
+    return {
+      gameId,
+      rivalUserId: closest.userId,
+      rivalName: name,
+      rank: closest.rank,
+      status: "tied",
+      chipText: `${name} · tied`,
+      message: `You're tied with ${name} at #${closest.rank}. One cleaner run breaks it.`,
+    };
+  }
+
+  if (gap.status === "ahead") {
+    return {
+      gameId,
+      rivalUserId: closest.userId,
+      rivalName: name,
+      rank: closest.rank,
+      status: "ahead",
+      chipText: `${name} · ${gap.text}`,
+      message: `You're ${gap.text} of ${name}. Keep the pressure on.`,
+    };
+  }
+
+  return {
+    gameId,
+    rivalUserId: closest.userId,
+    rivalName: name,
+    rank: closest.rank,
+    status: "behind",
+    chipText: `${name} · ${gap.text}`,
+    message: `You're ${gap.text} ${name} for #${closest.rank}.`,
+  };
 }
 
 export function formatBoardLabel(levelId: string, settings?: BoardSettings): string {

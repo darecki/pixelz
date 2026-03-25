@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   getCompetitionOverview,
   getLeaderboardWindowStart,
+  getRivalChallengeSummary,
   recordCompetitionResult,
   toDateKey,
 } from "./competition";
@@ -73,5 +74,34 @@ describe("competition UTC daily helpers", () => {
 
     expect(getCompetitionOverview(new Date("2026-03-26T00:15:00Z")).streak).toBe(2);
     expect(getCompetitionOverview(new Date("2026-03-27T00:15:00Z")).streak).toBe(0);
+  });
+
+  it("summarizes the closest rival challenge for an active run", () => {
+    const summary = getRivalChallengeSummary(
+      "pixelz",
+      { moves: 12, timeMs: 21000 },
+      [
+        { userId: "rival-a", nickname: "Ari", rank: 2, moves: 11, timeMs: 24000 },
+        { userId: "rival-b", nickname: "Bea", rank: 5, moves: 14, timeMs: 17000 },
+      ],
+      ["rival-a", "rival-b"]
+    );
+
+    expect(summary?.status).toBe("behind");
+    expect(summary?.rivalName).toBe("Ari");
+    expect(summary?.message).toContain("1 move behind Ari");
+  });
+
+  it("gives an unplayed rival prompt when the player has no benchmark yet", () => {
+    const summary = getRivalChallengeSummary(
+      "reflex",
+      null,
+      [{ userId: "rival-a", nickname: "Ari", rank: 3, moves: 10, timeMs: 4321 }],
+      ["rival-a"]
+    );
+
+    expect(summary?.status).toBe("unplayed");
+    expect(summary?.chipText).toContain("Ari");
+    expect(summary?.message).toContain("Put up your first answer");
   });
 });

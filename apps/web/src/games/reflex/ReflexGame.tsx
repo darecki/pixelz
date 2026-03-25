@@ -17,7 +17,10 @@ import { hashString, mulberry32 } from "@pixelz/shared";
 import {
   formatPerformanceDelta,
   getLevelProgress,
+  getRivalChallengeSummary,
+  getRivalIds,
   recordCompetitionResult,
+  type RivalChallengeSummary,
 } from "../../lib/competition";
 
 type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "saving" | "finished" | "prompting" | "submitError";
@@ -58,6 +61,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const [resultInsight, setResultInsight] = useState<ResultInsight>({ projectedRank: null, nextTarget: null });
   const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("reflex", levelId));
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
+  const [rivalInsight, setRivalInsight] = useState<RivalChallengeSummary | null>(null);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -94,6 +98,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     setResultInsight({ projectedRank: null, nextTarget: null });
     setLastResultWasBest(null);
     setLastSplitMs(null);
+    setRivalInsight(null);
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
       if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
@@ -123,6 +128,15 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
       projectedRank,
       nextTarget: nextTarget ? { rank: nextTarget.rank, timeMs: nextTarget.timeMs } : null,
     });
+    setRivalInsight(
+      getRivalChallengeSummary(
+        "reflex",
+        { moves: totalRounds, timeMs: finalTimeMs },
+        leaderboard.entries,
+        getRivalIds(),
+        leaderboard.currentUserId
+      )
+    );
   }, [levelId]);
 
   const submitSessionCompletion = useCallback(async () => {
@@ -429,7 +443,14 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
                   : "You’re pacing the field"}
               </strong>
             </div>
+            {rivalInsight && (
+              <div className="metric-chip">
+                <span>Rival race</span>
+                <strong>{rivalInsight.chipText}</strong>
+              </div>
+            )}
           </div>
+          {rivalInsight && <p className="text-muted text-sm">{rivalInsight.message}</p>}
         </div>
         {phase === "saving" && <p className="loading-text text-sm">Saving…</p>}
         <GameOverNickname disabled={phase === "saving"} hideIfNoAuth={true} />
