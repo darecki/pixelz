@@ -273,7 +273,7 @@ export default function Leaderboard() {
   const highlightedLatestKey = latestMine ? `${latestMine.userId}-${latestMine.createdAt}` : null;
   const highlightedBestKey = bestMine ? `${bestMine.userId}-${bestMine.createdAt}` : null;
   const podium = visibleEntries.slice(0, 3);
-  const percentile = bestMine ? Math.max(1, Math.round((bestMine.rank / Math.max(data.entries.length, 1)) * 100)) : null;
+  const visibleSlicePosition = bestMine ? `#${bestMine.rank} of ${data.entries.length}` : null;
   const rivalSummary = getRivalChallengeSummary(
     game,
     bestMine ? { moves: bestMine.moves, timeMs: bestMine.timeMs } : null,
@@ -432,7 +432,7 @@ export default function Leaderboard() {
               key={`${entry.userId}-${entry.createdAt}`}
               className={`card podium-card podium-card--${index + 1}`}
             >
-              <span className="podium-rank">#{index + 1}</span>
+              <span className="podium-rank">#{entry.rank}</span>
               <h3>{displayUser(entry)}</h3>
               <p className="podium-score">
                 {isPixelz
@@ -453,8 +453,8 @@ export default function Leaderboard() {
                 <strong>{latestMine ? `#${latestMine.rank}` : "No run yet"}</strong>
               </div>
               <div className="metric-chip">
-                <span>Percentile</span>
-                <strong>{percentile ? `Top ${percentile}%` : "—"}</strong>
+                <span>Position in top slice</span>
+                <strong>{visibleSlicePosition ?? "—"}</strong>
               </div>
             </div>
             <p className="text-muted text-sm">
