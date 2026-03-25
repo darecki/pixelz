@@ -145,7 +145,7 @@ export default function Leaderboard() {
       levelParam !== effectiveLevel ||
       (game === "reflex" && !levelParam) ||
       (game === "pixelz" && !levelParam) ||
-      windowParam !== windowKey ||
+      (windowParam !== windowKey && !(windowParam == null && windowKey === "all")) ||
       (scopeParam !== scope && !(scopeParam == null && scope === "global"))
     ) {
       setSearchParams((prev) => {

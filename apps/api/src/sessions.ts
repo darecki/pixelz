@@ -144,7 +144,10 @@ type SeriesState = {
 function parseSeriesState(settings: Record<string, unknown> | null | undefined): SeriesState {
   const rawLength = Number(settings?.seriesLength);
   const seriesLength: 1 | 3 = rawLength === 3 ? 3 : 1;
-  const currentRound = Math.max(1, Math.trunc(Number(settings?.currentRound ?? 1)));
+  const rawCurrentRound = Number(settings?.currentRound);
+  const currentRound = Number.isFinite(rawCurrentRound)
+    ? Math.max(1, Math.trunc(rawCurrentRound))
+    : 1;
   const rawWins = settings?.seriesWins;
   const seriesWins = rawWins && typeof rawWins === "object"
     ? Object.fromEntries(

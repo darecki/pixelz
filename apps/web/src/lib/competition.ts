@@ -623,7 +623,9 @@ export function getSeriesMeta(
       decided: false,
     };
   }
-  const round = Math.max(1, Math.trunc(settings?.currentRound ?? 1));
+  const currentRoundRaw = Number(settings?.currentRound);
+  const currentRoundSafe = Number.isFinite(currentRoundRaw) ? currentRoundRaw : 1;
+  const round = Math.max(1, Math.trunc(currentRoundSafe));
   const wins = { ...(settings?.seriesWins ?? {}) };
   if (winnerUserId) {
     wins[winnerUserId] = (wins[winnerUserId] ?? 0) + 1;
