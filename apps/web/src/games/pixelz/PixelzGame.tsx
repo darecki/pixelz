@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
 import { fetchBoard, fetchLeaderboard, STORAGE_KEYS } from "../../lib/api";
@@ -9,12 +9,24 @@ import SignInPrompt from "../../components/SignInPrompt";
 import { computePixelzScore } from "@pixelz/shared";
 import { generateGrid } from "./boardGenerator";
 import { PIXELZ_COLORS } from "./constants";
+import {
+  formatPerformanceDelta,
+  getLevelProgress,
+  recordCompetitionResult,
+  type GameId,
+} from "../../lib/competition";
 
 const KEYBOARD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+
 type SessionGameProps = {
   seed: string;
   onComplete: (result: { moves: number; timeMs: number; moveSequence?: number[] }) => void | Promise<void>;
   onProgress?: (progress: { moves: number; timeMs: number }) => void;
+};
+
+type ResultInsight = {
+  projectedRank: number | null;
+  nextTarget: { moves: number; timeMs: number; rank: number } | null;
 };
 
 function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
@@ -22,18 +34,16 @@ function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
   return rank <= Math.ceil(leaderboardSize * 0.1);
 }
 
-function applyFloodFill(
-  grid: number[][],
-  fromColor: number,
-  toColor: number
-): number[][] {
-  if (fromColor === toColor) return grid;
+function applyFloodFill(grid: number[][], fromColor: number, toColor: number): { nextGrid: number[][]; changedKeys: string[] } {
+  if (fromColor === toColor) return { nextGrid: grid, changedKeys: [] };
   const height = grid.length;
   const width = grid[0].length;
   const next = grid.map((row) => row.slice());
+  const changedKeys: string[] = [];
   const stack: [number, number][] = [[0, 0]];
-  if (next[0][0] !== fromColor) return next;
+  if (next[0][0] !== fromColor) return { nextGrid: next, changedKeys };
   next[0][0] = toColor;
+  changedKeys.push("0-0");
   while (stack.length > 0) {
     const [x, y] = stack.pop()!;
     for (const [dx, dy] of [
@@ -46,11 +56,12 @@ function applyFloodFill(
       const ny = y + dy;
       if (nx >= 0 && nx < width && ny >= 0 && ny < height && next[ny][nx] === fromColor) {
         next[ny][nx] = toColor;
+        changedKeys.push(`${ny}-${nx}`);
         stack.push([nx, ny]);
       }
     }
   }
-  return next;
+  return { nextGrid: next, changedKeys };
 }
 
 function isFilled(grid: number[][]): boolean {
@@ -60,6 +71,7 @@ function isFilled(grid: number[][]): boolean {
 
 export default function PixelzGame({ levelId, sessionProps }: { levelId: string; sessionProps?: SessionGameProps }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [grid, setGrid] = useState<number[][] | null>(null);
@@ -73,9 +85,24 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [sessionFinishError, setSessionFinishError] = useState<string | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [promptRank, setPromptRank] = useState(0);
+  const [recentlyChanged, setRecentlyChanged] = useState<string[]>([]);
+  const [resultInsight, setResultInsight] = useState<ResultInsight>({ projectedRank: null, nextTarget: null });
+  const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("pixelz", levelId));
+  const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
   const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; moveSequence?: number[] } | null>(null);
+
+  const personalBest = useMemo(() => (
+    levelProgress ? { moves: levelProgress.bestMoves, timeMs: levelProgress.bestTimeMs } : null
+  ), [levelProgress]);
+  const livePaceText = personalBest
+    ? moves < personalBest.moves
+      ? `${personalBest.moves - moves} moves in hand vs PB`
+      : moves === personalBest.moves
+        ? "Even with your PB move pace"
+        : `${moves - personalBest.moves} moves behind PB pace`
+    : null;
 
   const submitSessionCompletion = useCallback(async () => {
     if (!sessionProps?.onComplete || !pendingSessionResultRef.current) return;
@@ -99,6 +126,10 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
     setSessionFinishError(null);
     setLoading(true);
     setError(null);
+    setLevelProgress(getLevelProgress("pixelz", levelId));
+    setRecentlyChanged([]);
+    setResultInsight({ projectedRank: null, nextTarget: null });
+    setLastResultWasBest(null);
     fetchBoard(levelId)
       .then((board) => {
         if (cancelled) return;
@@ -122,6 +153,26 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
     };
   }, [levelId]);
 
+  useEffect(() => {
+    if (recentlyChanged.length === 0) return;
+    const id = window.setTimeout(() => setRecentlyChanged([]), 180);
+    return () => window.clearTimeout(id);
+  }, [recentlyChanged]);
+
+  const hydrateResultInsight = useCallback(async (finalMoves: number, elapsed: number) => {
+    const leaderboard = await fetchLeaderboard(levelId).catch(() => null);
+    if (!leaderboard) return;
+    const nextRankIndex = leaderboard.entries.findIndex((entry) => (
+      finalMoves < entry.moves || (finalMoves === entry.moves && elapsed < entry.timeMs)
+    ));
+    const projectedRank = nextRankIndex === -1 ? leaderboard.entries.length + 1 : nextRankIndex + 1;
+    const nextTarget = projectedRank > 1 ? leaderboard.entries[projectedRank - 2] : null;
+    setResultInsight({
+      projectedRank,
+      nextTarget: nextTarget ? { moves: nextTarget.moves, timeMs: nextTarget.timeMs, rank: nextTarget.rank } : null,
+    });
+  }, [levelId]);
+
   const handleColorClick = useCallback(
     (colorIndex: number) => {
       if (!grid || won || scoreSubmittedRef.current) return;
@@ -129,8 +180,9 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
       if (colorIndex === currentColor) return;
       const start = startTime ?? Date.now();
       if (startTime === null) setStartTime(start);
-      const nextGrid = applyFloodFill(grid, currentColor, colorIndex);
+      const { nextGrid, changedKeys } = applyFloodFill(grid, currentColor, colorIndex);
       setGrid(nextGrid);
+      setRecentlyChanged(changedKeys);
       const nextMoves = moves + 1;
       setMoves(nextMoves);
       setMoveSequence((seq) => [...seq, colorIndex]);
@@ -144,6 +196,17 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
         const finalMoves = moves + 1;
         const seq = [...moveSequence, colorIndex];
         const score = computePixelzScore(finalMoves, elapsed);
+        const dailyChallenge = searchParams.get("daily") === "1";
+        const recorded = recordCompetitionResult({
+          gameId: "pixelz" satisfies GameId,
+          levelId,
+          moves: finalMoves,
+          timeMs: elapsed,
+          dailyChallenge,
+        });
+        setLevelProgress(recorded.current);
+        setLastResultWasBest(recorded.isNewBest);
+        hydrateResultInsight(finalMoves, elapsed).catch(() => {});
 
         if (sessionProps?.onComplete) {
           pendingSessionResultRef.current = { moves: finalMoves, timeMs: elapsed, moveSequence: seq };
@@ -153,7 +216,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
 
         const checkAuthAndPrompt = async () => {
           const { data: { session } } = await supabase.auth.getSession();
-          
+
           if (session?.access_token) {
             appendEvent({
               type: "LEVEL_COMPLETED",
@@ -178,7 +241,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
               setWon(true);
               return;
             }
-            
+
             try {
               const leaderboard = await fetchLeaderboard(levelId);
               const entries = leaderboard.entries;
@@ -191,7 +254,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
                   break;
                 }
               }
-              
+
               if (qualifiesForPrompt(rank, entries.length)) {
                 pendingScoreRef.current = { score, moves: finalMoves, timeMs: elapsed, moveSequence: seq };
                 setPromptRank(rank);
@@ -204,11 +267,11 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             }
           }
         };
-        
+
         checkAuthAndPrompt();
       }
     },
-    [grid, won, startTime, moves, moveSequence, levelId, sessionProps, submitSessionCompletion]
+    [grid, won, startTime, moves, moveSequence, levelId, sessionProps, submitSessionCompletion, searchParams, hydrateResultInsight]
   );
 
   useEffect(() => {
@@ -246,20 +309,54 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   if (won) {
     return (
       <div className="game-container game-result">
-        <h2>Done! 🎉</h2>
-        <p className="game-result-stats">
-          Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
-        </p>
+        <div className="game-result-stack">
+          <span className={`status-pill ${lastResultWasBest ? "status-pill--success" : ""}`}>
+            {lastResultWasBest ? "New personal best" : "Run complete"}
+          </span>
+          <h2>Done!</h2>
+          <p className="game-result-stats">
+            Moves: <strong>{moves}</strong> · Time: <strong>{(timeMs / 1000).toFixed(2)}s</strong>
+          </p>
+          <p className="text-secondary">
+            {personalBest
+              ? lastResultWasBest
+                ? "You beat your previous best and set the new target."
+                : `You finished ${formatPerformanceDelta("pixelz", { moves, timeMs }, personalBest)} than your PB.`
+              : "First result on this board. Set the tone and build a benchmark."}
+          </p>
+          <div className="metric-chip-row">
+            <div className="metric-chip">
+              <span>Projected rank</span>
+              <strong>{resultInsight.projectedRank ? `#${resultInsight.projectedRank}` : "Pending"}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Next target</span>
+              <strong>
+                {resultInsight.nextTarget
+                  ? `#${resultInsight.nextTarget.rank} · ${formatPerformanceDelta("pixelz", { moves, timeMs }, resultInsight.nextTarget)}`
+                  : "You’re leading this slice"}
+              </strong>
+            </div>
+          </div>
+        </div>
         {saving && <p className="loading-text text-sm">Saving…</p>}
         {!showSignInPrompt && <GameOverNickname disabled={saving} hideIfNoAuth={true} />}
         <div className="game-result-actions">
           <button
             type="button"
-            onClick={() => navigate(`/leaderboard?game=pixelz&level=${encodeURIComponent(levelId)}&justFinished=1`)}
+            onClick={() => window.location.reload()}
             className="btn btn-primary"
             disabled={saving}
           >
-            View leaderboard
+            {lastResultWasBest ? "Defend your PB" : "Beat your PB"}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/leaderboard?game=pixelz&level=${encodeURIComponent(levelId)}&justFinished=1`)}
+            className="btn"
+            disabled={saving}
+          >
+            View ranking
           </button>
           <button
             type="button"
@@ -269,20 +366,14 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
               const btn = e.currentTarget;
               const original = btn.innerText;
               btn.innerText = "Copied!";
-              setTimeout(() => { btn.innerText = original; }, 2000);
+              setTimeout(() => {
+                btn.innerText = original;
+              }, 2000);
             }}
             className="btn"
             disabled={saving}
           >
             Challenge a friend
-          </button>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="btn"
-            disabled={saving}
-          >
-            Play again
           </button>
           <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={saving}>
             Home
@@ -318,11 +409,27 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
 
   return (
     <div className="game-container">
-      <h2 className="game-title">Pixelz</h2>
-      <p className="game-stats">
-        Moves: <strong>{moves}</strong>
-        {startTime != null && <> · <strong>{((Date.now() - startTime) / 1000).toFixed(1)}s</strong></>}
-      </p>
+      <div className="game-header">
+        <span className={`status-pill ${searchParams.get("daily") === "1" ? "status-pill--success" : ""}`}>
+          {searchParams.get("daily") === "1" ? "Daily challenge" : "Solo run"}
+        </span>
+        <h2 className="game-title">Pixelz</h2>
+        <p className="game-stats">
+          Moves: <strong>{moves}</strong>
+          {startTime != null && <> · <strong>{((Date.now() - startTime) / 1000).toFixed(1)}s</strong></>}
+        </p>
+        <div className="game-info-strip">
+          <div className="metric-chip">
+            <span>Target PB</span>
+            <strong>{personalBest ? `${personalBest.moves} moves · ${(personalBest.timeMs / 1000).toFixed(2)}s` : "Set your first one"}</strong>
+          </div>
+          <div className="metric-chip">
+            <span>Pace</span>
+            <strong>{livePaceText ?? "Open with a clean first move"}</strong>
+          </div>
+        </div>
+      </div>
+
       <div className="game-board">
         <div
           style={{
@@ -335,6 +442,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             row.map((colorIndex, x) => (
               <div
                 key={`${y}-${x}`}
+                className={`pixelz-cell ${recentlyChanged.includes(`${y}-${x}`) ? "pixelz-cell--pulse" : ""}`}
                 style={{
                   width: cellSize,
                   height: cellSize,

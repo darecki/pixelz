@@ -11,6 +11,7 @@ import {
   type SessionResponse,
 } from "../lib/api";
 import { useGameSession } from "../hooks/useGameSession";
+import { describeSessionFormat, formatBoardLabel } from "../lib/competition";
 
 const LOBBY_POLL_INTERVAL_MS = 1000;
 
@@ -203,6 +204,9 @@ export default function SessionRoom() {
   const selfUserId = data.currentUserId;
   const me = currentPlayer;
   const opponents = data.players.filter((p) => p.userId !== selfUserId);
+  const settings = data.session.settings as { width?: number; height?: number; numColors?: number; rounds?: number };
+  const stakesLabel = describeSessionFormat(data.session.game, data.session.levelId, settings);
+  const boardLabel = data.session.levelId ? formatBoardLabel(data.session.levelId, settings) : "Custom format";
 
   if (data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned") {
     const canCreateNextSession = me?.role === "host";
@@ -216,11 +220,30 @@ export default function SessionRoom() {
     return (
       <div className="page-container">
         <div className="card">
-          <h2 className="mb-md">Session Results</h2>
-          <p className="text-secondary mb-sm">Status: <span className="badge">{data.session.status}</span></p>
+          <div className="session-header">
+            <div>
+              <p className="section-kicker">Match complete</p>
+              <h2 className="mb-sm">Session Results</h2>
+            </div>
+            <span className="badge">{data.session.status}</span>
+          </div>
+          <div className="metric-chip-row mb-md">
+            <div className="metric-chip">
+              <span>Game</span>
+              <strong>{game?.name ?? data.session.game}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Format</span>
+              <strong>{stakesLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Players</span>
+              <strong>{data.players.length} / {data.session.maxPlayers}</strong>
+            </div>
+          </div>
           <ul className="lobby-players">
             {sortedPlayers.map((p) => (
-              <li key={p.userId} className="lobby-player">
+              <li key={p.userId} className="lobby-player lobby-player--result">
                 {p.placement != null && (
                   <span className={`badge ${p.placement === 1 ? "badge-success" : p.placement <= 3 ? "badge-primary" : ""}`}>
                     #{p.placement}
@@ -261,15 +284,37 @@ export default function SessionRoom() {
     return (
       <div className="page-container">
         <div className="card">
-          <h2 className="mb-md">Lobby</h2>
-          <p className="text-secondary mb-sm">Game: <strong>{data.session.game}</strong></p>
-          <p className="text-secondary mb-md">Players: <strong>{data.players.length} / {data.session.maxPlayers}</strong></p>
+          <div className="session-header">
+            <div>
+              <p className="section-kicker">Lobby</p>
+              <h2 className="mb-sm">{game?.name ?? data.session.game}</h2>
+            </div>
+            <span className={`status-pill ${data.session.status === "ready" ? "status-pill--success" : ""}`}>
+              {data.session.status === "ready" ? "Countdown live" : "Waiting room"}
+            </span>
+          </div>
+          <div className="metric-chip-row mb-md">
+            <div className="metric-chip">
+              <span>Match stake</span>
+              <strong>{boardLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Format</span>
+              <strong>{stakesLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Players</span>
+              <strong>{data.players.length} / {data.session.maxPlayers}</strong>
+            </div>
+          </div>
           <ul className="lobby-players">
             {data.players.map((p) => (
-              <li key={p.userId} className="lobby-player">
+              <li key={p.userId} className="lobby-player lobby-player--rich">
                 {onlineSet.has(p.userId) ? <span className="online-dot" /> : <span className="offline-dot" />}
-                <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
-                <span className="badge">{p.role}</span>
+                <div className="lobby-player-copy">
+                  <span className="lobby-player-name">{p.nickname ?? p.userId}</span>
+                  <span className="text-muted text-sm">{p.role === "host" ? "Host" : "Guest"}</span>
+                </div>
                 <span className="badge">{p.status}</span>
               </li>
             ))}
@@ -335,8 +380,31 @@ export default function SessionRoom() {
 
   return (
     <div>
+      <div className="page-container page-container--wide">
+        <div className="multiplayer-stage-card">
+          <div>
+            <p className="section-kicker">Live Match</p>
+            <h2>{game?.name ?? data.session.game}</h2>
+          </div>
+          <div className="metric-chip-row">
+            <div className="metric-chip">
+              <span>Stake</span>
+              <strong>{boardLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Format</span>
+              <strong>{stakesLabel}</strong>
+            </div>
+            <div className="metric-chip">
+              <span>Your status</span>
+              <strong>{me?.status ?? "playing"}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
       {opponents.length > 0 && (
-        <div className="flex flex-col gap-sm mb-md opponents-container">
+        <div className="page-container page-container--wide">
+          <div className="flex flex-col gap-sm mb-md opponents-container">
           {opponents.map((opp) => {
             const progress = progressByUser[opp.userId];
             const resultSummary =
@@ -348,12 +416,16 @@ export default function SessionRoom() {
                   ? "playing"
                   : "playing · offline";
             return (
-              <div key={opp.userId} className="opponent-bar">
-                <strong>{opp.nickname ?? opp.userId}</strong>
-                {` · ${resultSummary}`}
+              <div key={opp.userId} className="opponent-bar opponent-bar--card">
+                <div>
+                  <strong>{opp.nickname ?? opp.userId}</strong>
+                  <p className="text-muted text-sm">{onlineSet.has(opp.userId) ? "Live in match" : "Connection dropped"}</p>
+                </div>
+                <span>{resultSummary}</span>
               </div>
             );
           })}
+        </div>
         </div>
       )}
       <Suspense fallback={<div className="page-container"><p className="loading-text">Loading game…</p></div>}>

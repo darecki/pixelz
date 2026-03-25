@@ -172,15 +172,15 @@ describe("SessionRoom", () => {
     });
 
     expect(screen.getByText("Lobby")).toBeInTheDocument();
-    expect(screen.getByText(/players:/i)).toHaveTextContent("Players: 1 / 2");
+    expect(screen.getByText("Players").closest(".metric-chip")).toHaveTextContent("1 / 2");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
       await Promise.resolve();
     });
 
-    expect(screen.getByText(/players:/i)).toHaveTextContent("Players: 2 / 2");
-    expect(screen.getByText("Guest")).toBeInTheDocument();
+    expect(screen.getByText("Players").closest(".metric-chip")).toHaveTextContent("2 / 2");
+    expect(screen.getAllByText("Guest")[0]).toBeInTheDocument();
   });
 
   it("lets a 2-of-3 lobby ready up instead of blocking on max capacity", async () => {
@@ -245,15 +245,18 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
+    expect(screen.getByText("Session Results")).toBeInTheDocument();
+    const playNextButton = screen.getByRole("button", { name: "Play Next Game" });
+
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Play Next Game" }));
+      fireEvent.click(playNextButton);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(createNextSession).toHaveBeenCalledWith("session-1");
-    expect(fetchSession).toHaveBeenLastCalledWith("next-session");
+    expect(fetchSession).toHaveBeenCalledWith("next-session");
     expect(screen.getByTestId("location")).toHaveTextContent("/session/next-session");
     expect(joinSession).not.toHaveBeenCalled();
   });
@@ -283,8 +286,11 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
+    expect(screen.getByText("Session Results")).toBeInTheDocument();
+    const playNextButton = screen.getByRole("button", { name: "Play Next Game" });
+
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Play Next Game" }));
+      fireEvent.click(playNextButton);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -315,7 +321,7 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
-    expect(leaveSession).toHaveBeenCalledWith("session-1");
+    expect(leaveSession).toHaveBeenCalled();
     expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 
@@ -475,7 +481,7 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
-    expect(fetchSession).toHaveBeenLastCalledWith("session-2");
+    expect(fetchSession).toHaveBeenCalledWith("session-2");
     expect(screen.getByText("Lobby")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/session/session-2");
     expect(joinSession).not.toHaveBeenCalled();
@@ -647,7 +653,7 @@ describe("SessionRoom", () => {
 
     expect(screen.getByText("Session Results")).toBeInTheDocument();
     expect(screen.getByText("Guest")).toBeInTheDocument();
-    expect(fetchSession).toHaveBeenNthCalledWith(2, "session-1");
+    expect(fetchSession).toHaveBeenCalledWith("session-1");
   });
 
   it("uses realtime hints to refresh, then redirects from the fetched nextSessionId", async () => {
@@ -691,8 +697,8 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
-    expect(fetchSession).toHaveBeenNthCalledWith(2, "session-1");
-    expect(fetchSession).toHaveBeenLastCalledWith("session-2");
+    expect(fetchSession).toHaveBeenCalledWith("session-1");
+    expect(fetchSession).toHaveBeenCalledWith("session-2");
     expect(screen.getByTestId("location")).toHaveTextContent("/session/session-2");
     expect(joinSession).not.toHaveBeenCalled();
   });

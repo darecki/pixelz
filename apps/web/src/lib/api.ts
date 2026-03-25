@@ -355,13 +355,22 @@ const LEADERBOARD_TIMEOUT_MS = 15_000;
 export async function fetchLeaderboard(
   levelId: string,
   accessToken?: string | null,
-  signal?: AbortSignal | null
+  signal?: AbortSignal | null,
+  window: "all" | "day" | "week" = "all",
+  sinceIso?: string | null
 ) {
   const headers: HeadersInit = {};
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/leaderboards/${encodeURIComponent(levelId)}`, { headers, signal });
+    const url = new URL(`${API_URL}/leaderboards/${encodeURIComponent(levelId)}`);
+    if (window !== "all") {
+      url.searchParams.set("window", window);
+    }
+    if (sinceIso) {
+      url.searchParams.set("since", sinceIso);
+    }
+    res = await fetch(url, { headers, signal });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Request timed out. Check the API is running (pnpm dev:api).");
