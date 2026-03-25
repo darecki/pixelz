@@ -321,7 +321,7 @@ describe("SessionRoom", () => {
       await Promise.resolve();
     });
 
-    expect(leaveSession).toHaveBeenCalled();
+    expect(leaveSession).toHaveBeenCalledWith("session-1");
     expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 

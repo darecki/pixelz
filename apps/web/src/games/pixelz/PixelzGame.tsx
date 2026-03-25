@@ -269,7 +269,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
 
               for (let i = 0; i < entries.length; i++) {
                 const entry = entries[i];
-                if (score < entry.score || (score === entry.score && elapsed < entry.timeMs)) {
+                if (finalMoves < entry.moves || (finalMoves === entry.moves && elapsed < entry.timeMs)) {
                   rank = i + 1;
                   break;
                 }
