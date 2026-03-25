@@ -5,6 +5,7 @@ import { performSync } from "../../lib/sync";
 import { fetchBoard, fetchLeaderboard, STORAGE_KEYS } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import GameOverNickname from "../../components/GameOverNickname";
+import PixelzReplayViewer from "../../components/PixelzReplayViewer";
 import SignInPrompt from "../../components/SignInPrompt";
 import { computePixelzScore } from "@pixelz/shared";
 import { generateGrid } from "./boardGenerator";
@@ -77,6 +78,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [board, setBoard] = useState<Awaited<ReturnType<typeof fetchBoard>> | null>(null);
   const [grid, setGrid] = useState<number[][] | null>(null);
   const [numColors, setNumColors] = useState(5);
   const [moves, setMoves] = useState(0);
@@ -93,6 +95,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("pixelz", levelId));
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
   const [rivalInsight, setRivalInsight] = useState<RivalChallengeSummary | null>(null);
+  const [showReplay, setShowReplay] = useState(false);
   const scoreSubmittedRef = useRef(false);
   const pendingScoreRef = useRef<{ score: number; moves: number; timeMs: number; moveSequence: number[] } | null>(null);
   const pendingSessionResultRef = useRef<{ moves: number; timeMs: number; moveSequence?: number[] } | null>(null);
@@ -130,15 +133,18 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
     setSessionFinishError(null);
     setLoading(true);
     setError(null);
+    setBoard(null);
     setLevelProgress(getLevelProgress("pixelz", levelId));
     setRecentlyChanged([]);
     setResultInsight({ projectedRank: null, nextTarget: null });
     setLastResultWasBest(null);
     setRivalInsight(null);
+    setShowReplay(false);
     fetchBoard(levelId)
       .then((board) => {
         if (cancelled) return;
         const g = generateGrid(board.width, board.height, board.numColors, board.seed);
+        setBoard(board);
         setGrid(g);
         setNumColors(board.numColors);
         setMoves(0);
@@ -396,10 +402,23 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
           >
             Challenge a friend
           </button>
+          {board && moveSequence.length > 0 && (
+            <button type="button" onClick={() => setShowReplay((current) => !current)} className="btn" disabled={saving}>
+              {showReplay ? "Hide replay" : "Watch replay"}
+            </button>
+          )}
           <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={saving}>
             Home
           </button>
         </div>
+        {showReplay && board && moveSequence.length > 0 && (
+          <PixelzReplayViewer
+            board={board}
+            moveSequence={moveSequence}
+            title="Your solve replay"
+            subtitle={`Watch all ${moveSequence.length} moves back.`}
+          />
+        )}
       </div>
     );
   }

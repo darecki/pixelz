@@ -1099,6 +1099,43 @@ label {
   gap: 0.85rem;
 }
 
+.replay-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.replay-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.replay-board-shell {
+  display: flex;
+  justify-content: center;
+}
+
+.replay-board {
+  display: grid;
+  gap: 1px;
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-secondary) 86%, var(--accent-soft));
+}
+
+.replay-cell {
+  border-radius: 6px;
+}
+
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
 .rival-btn {
   border: 1px solid var(--border);
   background: transparent;

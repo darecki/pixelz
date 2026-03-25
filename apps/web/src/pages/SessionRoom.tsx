@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getGameById } from "../games/registry";
+import PixelzReplayViewer from "../components/PixelzReplayViewer";
 import {
   beginSession,
   createNextSession,
+  fetchBoard,
   fetchSession,
   finishSession,
   leaveSession,
@@ -29,6 +31,8 @@ export default function SessionRoom() {
   const { sessionId = "" } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState<SessionResponse | null>(null);
+  const [pixelzBoard, setPixelzBoard] = useState<Awaited<ReturnType<typeof fetchBoard>> | null>(null);
+  const [showWinnerReplay, setShowWinnerReplay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -125,6 +129,26 @@ export default function SessionRoom() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (data?.session.game !== "pixelz" || !data.session.levelId) {
+      setPixelzBoard(null);
+      setShowWinnerReplay(false);
+      return;
+    }
+    let cancelled = false;
+    setShowWinnerReplay(false);
+    fetchBoard(data.session.levelId)
+      .then((board) => {
+        if (!cancelled) setPixelzBoard(board);
+      })
+      .catch(() => {
+        if (!cancelled) setPixelzBoard(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.session.game, data?.session.levelId]);
 
   async function handleCopyInviteUrl(inviteUrl: string) {
     if (typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -223,6 +247,7 @@ export default function SessionRoom() {
       if (b.placement != null) return 1;
       return 0; // fallback if neither has placement
     });
+    const replayWinner = sortedPlayers.find((player) => player.placement === 1 && (player.moveSequence?.length ?? 0) > 0) ?? null;
 
     return (
       <div className="page-container">
@@ -294,10 +319,27 @@ export default function SessionRoom() {
             ) : (
               <span className="text-muted">Waiting for host to start the next game.</span>
             )}
+            {data.session.game === "pixelz" && replayWinner && pixelzBoard && (
+              <button
+                type="button"
+                onClick={() => setShowWinnerReplay((current) => !current)}
+                className="btn"
+              >
+                {showWinnerReplay ? "Hide winner replay" : "Watch winner replay"}
+              </button>
+            )}
             <button type="button" onClick={handleLeave} disabled={working} className="btn btn-ghost">
               Leave
             </button>
           </div>
+          {showWinnerReplay && replayWinner && pixelzBoard && replayWinner.moveSequence && (
+            <PixelzReplayViewer
+              board={pixelzBoard}
+              moveSequence={replayWinner.moveSequence}
+              title={`${replayWinner.nickname ?? replayWinner.userId}'s winning solve`}
+              subtitle={`Replaying the ${replayWinner.moveSequence.length}-move winning path.`}
+            />
+          )}
         </div>
       </div>
     );
