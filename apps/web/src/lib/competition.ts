@@ -96,6 +96,7 @@ type BoardSettings = {
   width?: number;
   height?: number;
   numColors?: number;
+  rounds?: number;
   seriesLength?: number;
   currentRound?: number;
   seriesWins?: Record<string, number>;
@@ -598,7 +599,7 @@ export function formatBoardLabel(levelId: string, settings?: BoardSettings): str
 export function describeSessionFormat(gameId: GameId, levelId: string | null, settings?: BoardSettings): string {
   const seriesLabel = settings?.seriesLength === 3 ? " · best of 3" : "";
   if (gameId === "reflex") {
-    const rounds = levelId ? REFLEX_LEVELS[levelId as ReflexLevelId] : Number(settings?.height ?? 10);
+    const rounds = levelId ? REFLEX_LEVELS[levelId as ReflexLevelId] : Number(settings?.rounds ?? 10);
     return `${rounds} round duel${seriesLabel}`;
   }
   if (levelId && isPredefinedPixelzLevel(levelId)) {

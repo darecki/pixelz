@@ -54,6 +54,10 @@ function isValidLevel(game: GameId, levelId: string): boolean {
   return false;
 }
 
+function formatCustomBoardOptionLabel(boardId: string, meta?: BoardMeta): string {
+  return meta ? formatBoardLabel(boardId, meta) : `Custom board · ${boardId.slice(0, 8)}`;
+}
+
 export default function Leaderboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const levelParam = searchParams.get("level");
@@ -111,22 +115,30 @@ export default function Leaderboard() {
   }, [game]);
 
   useEffect(() => {
-    if (game !== "pixelz" || myBoardIds.length === 0) return;
+    if (game !== "pixelz" || isPredefinedPixelzLevel(effectiveLevel) || boardMeta[effectiveLevel]) return;
     let cancelled = false;
-    Promise.all(
-      myBoardIds.map(async (boardId) => {
-        const board = await fetchBoard(boardId).catch(() => null);
-        if (!board) return null;
-        return [boardId, { boardId, width: board.width, height: board.height, numColors: board.numColors }] as const;
+    fetchBoard(effectiveLevel)
+      .then((board) => {
+        if (cancelled) return;
+        setBoardMeta((prev) => (
+          prev[effectiveLevel]
+            ? prev
+            : {
+                ...prev,
+                [effectiveLevel]: {
+                  boardId: board.boardId,
+                  width: board.width,
+                  height: board.height,
+                  numColors: board.numColors,
+                },
+              }
+        ));
       })
-    ).then((results) => {
-      if (cancelled) return;
-      setBoardMeta(Object.fromEntries(results.filter((entry): entry is readonly [string, BoardMeta] => Boolean(entry))));
-    });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [game, myBoardIds]);
+  }, [boardMeta, effectiveLevel, game]);
 
   useEffect(() => {
     if (
@@ -366,11 +378,11 @@ export default function Leaderboard() {
                 >
                   {!isCustomEffective && <option value="" disabled>My custom boards…</option>}
                   {isCustomEffective && !customBoardIds.includes(effectiveLevel) && (
-                    <option value={effectiveLevel}>{formatBoardLabel(effectiveLevel)}</option>
+                    <option value={effectiveLevel}>{formatCustomBoardOptionLabel(effectiveLevel, boardMeta[effectiveLevel])}</option>
                   )}
                   {customBoardIds.map((id) => (
                     <option key={id} value={id}>
-                      {formatBoardLabel(id, boardMeta[id])}
+                      {formatCustomBoardOptionLabel(id, boardMeta[id])}
                     </option>
                   ))}
                 </select>

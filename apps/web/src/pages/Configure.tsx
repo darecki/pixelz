@@ -105,12 +105,22 @@ export default function Configure() {
   }, [myBoardIds, selectedGame?.id]);
 
   async function withSession<T>(work: (accessToken: string) => Promise<T>): Promise<T | null> {
-    const sessionResult = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Auth session lookup timed out. Please refresh and try again.")), 8000);
-      }),
-    ]);
+    const sessionResult = await new Promise<Awaited<ReturnType<typeof supabase.auth.getSession>>>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        reject(new Error("Auth session lookup timed out. Please refresh and try again."));
+      }, 8000);
+
+      supabase.auth
+        .getSession()
+        .then((result) => {
+          window.clearTimeout(timeoutId);
+          resolve(result);
+        })
+        .catch((error) => {
+          window.clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
     const { data: { session } } = sessionResult;
     if (!session?.access_token) {
       setInviteError("Sign in to create a multiplayer invite.");

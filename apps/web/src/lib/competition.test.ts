@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  describeSessionFormat,
   getCompetitionProfile,
   getCompetitionOverview,
   getCurrentSeason,
@@ -129,6 +130,10 @@ describe("competition UTC daily helpers", () => {
 
     expect(meta.isBestOfThree).toBe(true);
     expect(meta.decided).toBe(true);
+  });
+
+  it("uses reflex rounds from settings when there is no predefined level id", () => {
+    expect(describeSessionFormat("reflex", null, { rounds: 7 })).toBe("7 round duel");
   });
 
   it("aggregates a usable competition profile from local progress", () => {

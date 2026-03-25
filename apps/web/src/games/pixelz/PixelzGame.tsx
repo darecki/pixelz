@@ -90,7 +90,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   const [sessionFinishError, setSessionFinishError] = useState<string | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [promptRank, setPromptRank] = useState(0);
-  const [recentlyChanged, setRecentlyChanged] = useState<string[]>([]);
+  const [recentlyChanged, setRecentlyChanged] = useState<Set<string>>(() => new Set());
   const [resultInsight, setResultInsight] = useState<ResultInsight>({ projectedRank: null, nextTarget: null });
   const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("pixelz", levelId));
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
@@ -135,7 +135,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
     setError(null);
     setBoard(null);
     setLevelProgress(getLevelProgress("pixelz", levelId));
-    setRecentlyChanged([]);
+    setRecentlyChanged(new Set());
     setResultInsight({ projectedRank: null, nextTarget: null });
     setLastResultWasBest(null);
     setRivalInsight(null);
@@ -165,8 +165,8 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
   }, [levelId]);
 
   useEffect(() => {
-    if (recentlyChanged.length === 0) return;
-    const id = window.setTimeout(() => setRecentlyChanged([]), 180);
+    if (recentlyChanged.size === 0) return;
+    const id = window.setTimeout(() => setRecentlyChanged(new Set()), 180);
     return () => window.clearTimeout(id);
   }, [recentlyChanged]);
 
@@ -202,7 +202,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
       if (startTime === null) setStartTime(start);
       const { nextGrid, changedKeys } = applyFloodFill(grid, currentColor, colorIndex);
       setGrid(nextGrid);
-      setRecentlyChanged(changedKeys);
+      setRecentlyChanged(new Set(changedKeys));
       const nextMoves = moves + 1;
       setMoves(nextMoves);
       setMoveSequence((seq) => [...seq, colorIndex]);
@@ -482,7 +482,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             row.map((colorIndex, x) => (
               <div
                 key={`${y}-${x}`}
-                className={`pixelz-cell ${recentlyChanged.includes(`${y}-${x}`) ? "pixelz-cell--pulse" : ""}`}
+                className={`pixelz-cell ${recentlyChanged.has(`${y}-${x}`) ? "pixelz-cell--pulse" : ""}`}
                 style={{
                   width: cellSize,
                   height: cellSize,

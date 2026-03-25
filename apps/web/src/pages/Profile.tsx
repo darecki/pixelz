@@ -9,7 +9,6 @@ import {
   getCurrentSeason,
   getQuickPlayLevel,
   getSeasonTier,
-  getSeasonWindowStart,
   type GameId,
 } from "../lib/competition";
 
@@ -49,7 +48,7 @@ export default function Profile() {
     (async () => {
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token ?? undefined;
-        const sinceIso = getSeasonWindowStart().toISOString();
+        const sinceIso = currentSeason.start.toISOString();
         const levels: Array<{ gameId: GameId; levelId: string }> = [
           { gameId: "pixelz", levelId: getQuickPlayLevel("pixelz") },
           { gameId: "reflex", levelId: getQuickPlayLevel("reflex") },
