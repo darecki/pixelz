@@ -262,6 +262,14 @@ export default function Leaderboard() {
     bestMine && bestMine.rank > 1
       ? data.entries.find((entry) => entry.rank === bestMine.rank - 1) ?? null
       : null;
+  const nextTargetDelta =
+    bestMine && nextTarget
+      ? formatPerformanceDelta(
+          game,
+          { moves: bestMine.moves, timeMs: bestMine.timeMs },
+          { moves: nextTarget.moves, timeMs: nextTarget.timeMs }
+        )
+      : null;
   const highlightedLatestKey = latestMine ? `${latestMine.userId}-${latestMine.createdAt}` : null;
   const highlightedBestKey = bestMine ? `${bestMine.userId}-${bestMine.createdAt}` : null;
   const podium = visibleEntries.slice(0, 3);
@@ -450,12 +458,10 @@ export default function Leaderboard() {
               </div>
             </div>
             <p className="text-muted text-sm">
-              {bestMine && nextTarget
-                ? `Beat #${nextTarget.rank} by ${formatPerformanceDelta(
-                    game,
-                    { moves: bestMine.moves, timeMs: bestMine.timeMs },
-                    { moves: nextTarget.moves, timeMs: nextTarget.timeMs }
-                  )}.`
+              {bestMine && nextTarget && nextTargetDelta
+                ? nextTargetDelta === "exactly tied"
+                  ? `You're currently tied with #${nextTarget.rank}. One cleaner run claims the next spot.`
+                  : `Beat #${nextTarget.rank} by ${nextTargetDelta}.`
                 : bestMine
                   ? "You’re on the board. One sharper run takes you higher."
                   : "Play a run to unlock your personal comparison cards."}

@@ -13,6 +13,7 @@ import { PIXELZ_COLORS } from "./constants";
 import {
   formatPerformanceDelta,
   getLevelProgress,
+  qualifiesForPrompt,
   getRivalChallengeSummary,
   getRivalIds,
   recordCompetitionResult,
@@ -32,11 +33,6 @@ type ResultInsight = {
   projectedRank: number | null;
   nextTarget: { moves: number; timeMs: number; rank: number } | null;
 };
-
-function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
-  if (leaderboardSize < 100) return rank <= 10;
-  return rank <= Math.ceil(leaderboardSize * 0.1);
-}
 
 function applyFloodFill(grid: number[][], fromColor: number, toColor: number): { nextGrid: number[][]; changedKeys: string[] } {
   if (fromColor === toColor) return { nextGrid: grid, changedKeys: [] };
@@ -341,7 +337,9 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             {personalBest
               ? lastResultWasBest
                 ? "You beat your previous best and set the new target."
-                : `You finished ${formatPerformanceDelta("pixelz", { moves, timeMs }, personalBest)} than your PB.`
+                : moves === personalBest.moves && timeMs === personalBest.timeMs
+                  ? "You matched your PB exactly. A cleaner move count or faster finish takes the next step."
+                  : `You finished ${formatPerformanceDelta("pixelz", { moves, timeMs }, personalBest)} than your PB.`
               : "First result on this board. Set the tone and build a benchmark."}
           </p>
           <div className="metric-chip-row">

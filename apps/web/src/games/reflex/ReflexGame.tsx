@@ -17,6 +17,7 @@ import { hashString, mulberry32 } from "@pixelz/shared";
 import {
   formatPerformanceDelta,
   getLevelProgress,
+  qualifiesForPrompt,
   getRivalChallengeSummary,
   getRivalIds,
   recordCompetitionResult,
@@ -42,11 +43,6 @@ type GhostTarget = {
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
 const KEYBOARD_KEYS = ["q", "w", "e", "p"] as const;
-
-function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
-  if (leaderboardSize < 100) return rank <= 10;
-  return rank <= Math.ceil(leaderboardSize * 0.1);
-}
 
 export default function ReflexGame({ levelId, sessionProps }: { levelId: string; sessionProps?: SessionGameProps }) {
   const navigate = useNavigate();
@@ -145,7 +141,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     return () => {
       cancelled = true;
     };
-  }, [levelId, personalBest?.timeMs]);
+  }, [levelId, personalBest]);
 
   function startGame() {
     scoreSubmittedRef.current = false;
@@ -179,7 +175,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
         leaderboard.currentUserId
       )
     );
-  }, [levelId]);
+  }, [levelId, totalRounds]);
 
   const submitSessionCompletion = useCallback(async () => {
     if (!sessionProps?.onComplete || !pendingSessionResultRef.current) return;
@@ -193,25 +189,6 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
       setPhase("submitError");
     }
   }, [sessionProps]);
-
-  useEffect(() => {
-    if (sessionProps && phase === "idle") {
-      startGame();
-    }
-  }, [sessionProps, phase]);
-
-  useEffect(() => {
-    if (phase !== "reaction") return;
-    function handleKeyDown(e: KeyboardEvent) {
-      const keyIndex = KEYBOARD_KEYS.indexOf(e.key.toLowerCase() as (typeof KEYBOARD_KEYS)[number]);
-      if (keyIndex >= 0 && keyIndex < REFLEX_COLORS.length) {
-        e.preventDefault();
-        handleButtonClick(REFLEX_COLORS[keyIndex]);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [phase]);
 
   useEffect(() => {
     if (phase !== "countdown") return;
@@ -231,7 +208,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     };
   }, [phase, countdownStep, pickTargetColor, shortBeep, longBeep, round]);
 
-  function handleButtonClick(clickedColor: string) {
+  const handleButtonClick = useCallback((clickedColor: string) => {
     if (phase !== "reaction" || !targetColor) return;
     if (scoreSubmittedRef.current) return;
     if (clickedColor !== targetColor) {
@@ -335,7 +312,37 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
       setPhase("countdown");
       setCountdownStep(0);
     }, DELAY_AFTER_CORRECT_MS);
-  }
+  }, [
+    cumulativeTimeMs,
+    hydrateResultInsight,
+    levelId,
+    phase,
+    round,
+    searchParams,
+    sessionProps,
+    submitSessionCompletion,
+    targetColor,
+    totalRounds,
+  ]);
+
+  useEffect(() => {
+    if (sessionProps && phase === "idle") {
+      startGame();
+    }
+  }, [sessionProps, phase]);
+
+  useEffect(() => {
+    if (phase !== "reaction") return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const keyIndex = KEYBOARD_KEYS.indexOf(e.key.toLowerCase() as (typeof KEYBOARD_KEYS)[number]);
+      if (keyIndex >= 0 && keyIndex < REFLEX_COLORS.length) {
+        e.preventDefault();
+        handleButtonClick(REFLEX_COLORS[keyIndex]);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleButtonClick, phase]);
 
   const isReacting = phase === "reaction";
 
@@ -469,7 +476,9 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             {personalBest
               ? lastResultWasBest
                 ? "You lowered your best total and raised the bar for the next run."
-                : `You finished ${formatPerformanceDelta("reflex", { moves: totalRounds, timeMs: cumulativeTimeMs }, personalBest)} than your PB.`
+                : cumulativeTimeMs === personalBest.timeMs
+                  ? "You matched your PB exactly. One sharper split is all it takes to move it."
+                  : `You finished ${formatPerformanceDelta("reflex", { moves: totalRounds, timeMs: cumulativeTimeMs }, personalBest)} than your PB.`
               : "First clean finish on this level. Now you have a time to hunt."}
           </p>
           <div className="metric-chip-row">

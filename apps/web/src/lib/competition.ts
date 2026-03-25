@@ -500,6 +500,11 @@ export function getRivalIds(): string[] {
   return readState().rivals;
 }
 
+export function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
+  if (leaderboardSize < 100) return rank <= 10;
+  return rank <= Math.ceil(leaderboardSize * 0.1);
+}
+
 export function isRival(userId: string): boolean {
   return getRivalIds().includes(userId);
 }
@@ -653,10 +658,12 @@ export function formatPerformanceDelta(
       return diff < 0 ? `${Math.abs(diff)} moves better` : `${diff} moves behind`;
     }
     const diff = current.timeMs - target.timeMs;
+    if (diff === 0) return "exactly tied";
     return diff < 0 ? `${(Math.abs(diff) / 1000).toFixed(2)}s faster` : `${(diff / 1000).toFixed(2)}s slower`;
   }
 
   const diff = current.timeMs - target.timeMs;
+  if (diff === 0) return "exactly tied";
   return diff < 0 ? `${(Math.abs(diff) / 1000).toFixed(2)}s faster` : `${(diff / 1000).toFixed(2)}s slower`;
 }
 

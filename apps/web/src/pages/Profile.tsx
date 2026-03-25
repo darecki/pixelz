@@ -9,6 +9,7 @@ import {
   getCurrentSeason,
   getQuickPlayLevel,
   getSeasonTier,
+  toDateKey,
   type GameId,
 } from "../lib/competition";
 
@@ -33,7 +34,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
 
   const currentSeason = useMemo(() => getCurrentSeason(now), [now]);
-  const profile = useMemo(() => getCompetitionProfile(now), [now]);
+  const todayKey = useMemo(() => toDateKey(now), [now]);
+  const profileSnapshotKey = `${currentSeason.id}:${todayKey}`;
+  const profile = useMemo(() => getCompetitionProfile(now), [profileSnapshotKey]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
