@@ -130,28 +130,21 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   }, [levelId, personalBest?.timeMs]);
 
   useEffect(() => {
+    if (personalBest) return;
     let cancelled = false;
     fetchLeaderboard(levelId)
       .then((leaderboard) => {
         if (cancelled) return;
-        if (personalBest) {
-          setGhostTarget({ label: "PB ghost", timeMs: personalBest.timeMs });
-          return;
-        }
         const leader = leaderboard.entries[0];
         if (leader) {
           setGhostTarget({ label: "Leaderboard ghost", timeMs: leader.timeMs });
         }
       })
-      .catch(() => {
-        if (!cancelled && personalBest) {
-          setGhostTarget({ label: "PB ghost", timeMs: personalBest.timeMs });
-        }
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [levelId, personalBest]);
+  }, [levelId, personalBest?.timeMs]);
 
   function startGame() {
     scoreSubmittedRef.current = false;

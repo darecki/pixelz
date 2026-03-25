@@ -6,7 +6,6 @@ import {
   getDailyChallenges,
   getLevelProgress,
   getQuickPlayLevel,
-  toDateKey,
   type GameId,
 } from "../lib/competition";
 import ReflexPreviewFrame from "../components/ReflexPreviewFrame";
@@ -33,10 +32,9 @@ function formatPersonalBest(gameId: GameId, progress: ReturnType<typeof getLevel
 export default function Home() {
   const [now, setNow] = useState(() => new Date());
 
-  const dailyDateKey = useMemo(() => toDateKey(now), [now]);
   const daily = useMemo(() => getDailyChallenges(now), [now]);
   const dailyChallenges = useMemo(() => daily.challenges, [daily]);
-  const overview = useMemo(() => getCompetitionOverview(), [dailyDateKey]);
+  const overview = useMemo(() => getCompetitionOverview(now), [now]);
   const challengeByGame = useMemo(
     () => Object.fromEntries(dailyChallenges.map((challenge) => [challenge.gameId, challenge])) as Record<GameId, typeof dailyChallenges[number]>,
     [dailyChallenges]

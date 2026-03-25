@@ -628,7 +628,7 @@ export function getSeriesMeta(
     wins[winnerUserId] = (wins[winnerUserId] ?? 0) + 1;
   }
   const targetWins = length === 3 ? 2 : 1;
-  const decided = Object.values(wins).some((value) => value >= targetWins) || Boolean(winnerUserId && round >= length);
+  const decided = Object.values(wins).some((value) => value >= targetWins) || round >= length;
   return {
     length,
     round,

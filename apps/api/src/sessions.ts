@@ -150,7 +150,10 @@ function parseSeriesState(settings: Record<string, unknown> | null | undefined):
     ? Object.fromEntries(
         Object.entries(rawWins as Record<string, unknown>)
           .filter((entry): entry is [string, number] => typeof entry[0] === "string" && typeof entry[1] === "number")
-          .map(([userId, wins]) => [userId, Math.max(0, Math.trunc(wins))])
+          .map(([userId, wins]) => {
+            const safeWins = Number.isFinite(wins) ? wins : 0;
+            return [userId, Math.max(0, Math.trunc(safeWins))];
+          })
       )
     : {};
   return { seriesLength, currentRound, seriesWins };

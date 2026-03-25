@@ -10,7 +10,6 @@ import {
   getQuickPlayLevel,
   getSeasonTier,
   getSeasonWindowStart,
-  toDateKey,
   type GameId,
 } from "../lib/competition";
 
@@ -34,9 +33,8 @@ export default function Profile() {
   const [seasonStandings, setSeasonStandings] = useState<Record<GameId, SeasonStanding> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const dailyDateKey = useMemo(() => toDateKey(now), [now]);
   const currentSeason = useMemo(() => getCurrentSeason(now), [now]);
-  const profile = useMemo(() => getCompetitionProfile(now), [dailyDateKey]);
+  const profile = useMemo(() => getCompetitionProfile(now), [now]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);

@@ -5,6 +5,7 @@ import {
   getCurrentSeason,
   getLeaderboardWindowStart,
   getRivalChallengeSummary,
+  getSeriesMeta,
   getSeasonTier,
   recordCompetitionResult,
   toDateKey,
@@ -121,6 +122,13 @@ describe("competition UTC daily helpers", () => {
     expect(getSeasonTier(30, 100).name).toBe("Gold");
     expect(getSeasonTier(55, 100).name).toBe("Silver");
     expect(getSeasonTier(null, 100).name).toBe("Bronze");
+  });
+
+  it("treats a best-of-3 at the round limit as decided even without a round winner", () => {
+    const meta = getSeriesMeta({ seriesLength: 3, currentRound: 3, seriesWins: { "host-1": 1, "guest-1": 1 } });
+
+    expect(meta.isBestOfThree).toBe(true);
+    expect(meta.decided).toBe(true);
   });
 
   it("aggregates a usable competition profile from local progress", () => {
