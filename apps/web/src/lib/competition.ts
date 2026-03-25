@@ -10,6 +10,7 @@ import {
 
 export type GameId = "pixelz" | "reflex";
 export type LeaderboardWindow = "all" | "day" | "week";
+export type LeaderboardView = LeaderboardWindow | "season";
 
 type ResultSnapshot = {
   moves: number;
@@ -32,6 +33,47 @@ export type RivalChallengeSummary = {
   status: "ahead" | "behind" | "tied" | "unplayed";
   chipText: string;
   message: string;
+};
+
+export type SeasonMeta = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  start: Date;
+  end: Date;
+  resetInMs: number;
+};
+
+export type SeasonTier = {
+  name: "Legend" | "Diamond" | "Gold" | "Silver" | "Bronze";
+  accent: "success" | "accent" | "warning" | "muted";
+};
+
+export type ProfileAchievement = {
+  id: string;
+  label: string;
+  description: string;
+  earned: boolean;
+};
+
+export type CompetitionProfile = {
+  totalPlays: number;
+  pbBoards: number;
+  dailyCyclesCompleted: number;
+  currentStreak: number;
+  rivalsCount: number;
+  favoriteGame: GameId | null;
+  currentSeason: SeasonMeta;
+  seasonDailyCompletions: number;
+  recentlyPlayed: Array<{
+    gameId: GameId;
+    levelId: string;
+    bestMoves: number;
+    bestTimeMs: number;
+    plays: number;
+    lastPlayedAt: string;
+  }>;
+  achievements: ProfileAchievement[];
 };
 
 type LevelProgress = {
@@ -78,12 +120,14 @@ type DailyChallenge = {
 
 const STORAGE_KEY = "pixelz_competition_state_v1";
 
-const DEFAULT_STATE: CompetitionState = {
-  version: 1,
-  levels: {},
-  dailyCompletions: {},
-  rivals: [],
-};
+function createDefaultState(): CompetitionState {
+  return {
+    version: 1,
+    levels: {},
+    dailyCompletions: {},
+    rivals: [],
+  };
+}
 
 export const PIXELZ_PRESET_CHALLENGES = [
   {
@@ -121,6 +165,10 @@ export const REFLEX_PRESET_CHALLENGES = [
   },
 ] as const;
 
+function gameFromLevelKey(key: string): GameId {
+  return key.startsWith("pixelz:") ? "pixelz" : "reflex";
+}
+
 function compareResults(gameId: GameId, a: ResultSnapshot, b: ResultSnapshot): number {
   if (gameId === "pixelz") {
     if (a.moves !== b.moves) return a.moves - b.moves;
@@ -134,7 +182,7 @@ function levelKey(gameId: GameId, levelId: string): string {
 }
 
 function normalizeState(value: unknown): CompetitionState {
-  if (!value || typeof value !== "object") return DEFAULT_STATE;
+  if (!value || typeof value !== "object") return createDefaultState();
   const raw = value as Partial<CompetitionState>;
   return {
     version: 1,
@@ -146,13 +194,13 @@ function normalizeState(value: unknown): CompetitionState {
 }
 
 function readState(): CompetitionState {
-  if (typeof localStorage === "undefined") return DEFAULT_STATE;
+  if (typeof localStorage === "undefined") return createDefaultState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_STATE;
+    if (!raw) return createDefaultState();
     return normalizeState(JSON.parse(raw));
   } catch {
-    return DEFAULT_STATE;
+    return createDefaultState();
   }
 }
 
@@ -234,6 +282,40 @@ export function getLeaderboardWindowStart(window: LeaderboardWindow, now = new D
     start.setUTCDate(start.getUTCDate() - 6);
   }
   return start;
+}
+
+export function getCurrentSeason(now = new Date()): SeasonMeta {
+  const year = now.getUTCFullYear();
+  const quarterIndex = Math.floor(now.getUTCMonth() / 3);
+  const quarterNumber = quarterIndex + 1;
+  const start = new Date(Date.UTC(year, quarterIndex * 3, 1, 0, 0, 0, 0));
+  const end =
+    quarterIndex === 3
+      ? new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
+      : new Date(Date.UTC(year, quarterIndex * 3 + 3, 1, 0, 0, 0, 0));
+
+  return {
+    id: `${year}-q${quarterNumber}`,
+    label: `Season ${year} · Q${quarterNumber}`,
+    shortLabel: `Q${quarterNumber} ${year}`,
+    start,
+    end,
+    resetInMs: Math.max(0, end.getTime() - now.getTime()),
+  };
+}
+
+export function getSeasonWindowStart(now = new Date()): Date {
+  return getCurrentSeason(now).start;
+}
+
+export function getSeasonTier(rank: number | null, totalEntries: number): SeasonTier {
+  if (!rank || totalEntries <= 0) return { name: "Bronze", accent: "muted" };
+  const percentile = (1 - (rank - 1) / Math.max(totalEntries, 1)) * 100;
+  if (rank === 1 || percentile >= 99) return { name: "Legend", accent: "success" };
+  if (percentile >= 90) return { name: "Diamond", accent: "accent" };
+  if (percentile >= 65) return { name: "Gold", accent: "warning" };
+  if (percentile >= 35) return { name: "Silver", accent: "muted" };
+  return { name: "Bronze", accent: "muted" };
 }
 
 export function getQuickPlayLevel(gameId: GameId): string {
@@ -338,6 +420,78 @@ export function getCompetitionOverview(now = new Date()) {
     streak,
     rivalsCount: state.rivals.length,
     completedToday: state.dailyCompletions[toDateKey(now)] ?? [],
+  };
+}
+
+export function getCompetitionProfile(now = new Date()): CompetitionProfile {
+  const state = readState();
+  const currentSeason = getCurrentSeason(now);
+  const levelEntries = Object.entries(state.levels)
+    .map(([key, value]) => ({
+      gameId: gameFromLevelKey(key),
+      levelId: key.split(":").slice(1).join(":"),
+      ...value,
+    }))
+    .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt));
+  const totalPlays = levelEntries.reduce((sum, entry) => sum + entry.plays, 0);
+  const pbBoards = levelEntries.length;
+  const favoriteGame =
+    levelEntries.length === 0
+      ? null
+      : (["pixelz", "reflex"] as const).reduce<GameId>((best, gameId) => {
+          const bestCount = levelEntries.filter((entry) => entry.gameId === best).reduce((sum, entry) => sum + entry.plays, 0);
+          const nextCount = levelEntries.filter((entry) => entry.gameId === gameId).reduce((sum, entry) => sum + entry.plays, 0);
+          return nextCount > bestCount ? gameId : best;
+        }, "pixelz");
+  const overview = getCompetitionOverview(now);
+  const seasonDailyCompletions = Object.entries(state.dailyCompletions).filter(
+    ([dateKey, games]) => games.length > 0 && new Date(`${dateKey}T00:00:00.000Z`) >= currentSeason.start
+  ).length;
+
+  const achievements: ProfileAchievement[] = [
+    {
+      id: "first-benchmark",
+      label: "First Benchmark",
+      description: "Set a personal best on any board.",
+      earned: pbBoards >= 1,
+    },
+    {
+      id: "streak-starter",
+      label: "Streak Starter",
+      description: "Hold a 3-day daily streak.",
+      earned: overview.streak >= 3,
+    },
+    {
+      id: "rival-hunter",
+      label: "Rival Hunter",
+      description: "Track at least 3 rivals.",
+      earned: state.rivals.length >= 3,
+    },
+    {
+      id: "arcade-regular",
+      label: "Arcade Regular",
+      description: "Log 10 total runs.",
+      earned: totalPlays >= 10,
+    },
+    {
+      id: "dual-threat",
+      label: "Dual Threat",
+      description: "Set PBs in both Pixelz and Reflex.",
+      earned: new Set(levelEntries.map((entry) => entry.gameId)).size >= 2,
+    },
+  ];
+
+  return {
+    totalPlays,
+    pbBoards,
+    dailyCyclesCompleted: Object.values(state.dailyCompletions).filter((games) => games.length > 0).length,
+    currentStreak: overview.streak,
+    rivalsCount: state.rivals.length,
+    favoriteGame,
+    currentSeason,
+    seasonDailyCompletions,
+    recentlyPlayed: levelEntries.slice(0, 6),
+    achievements,
   };
 }
 
@@ -503,8 +657,9 @@ export function formatPerformanceDelta(
   return diff < 0 ? `${(Math.abs(diff) / 1000).toFixed(2)}s faster` : `${(diff / 1000).toFixed(2)}s slower`;
 }
 
-export function getLeaderboardWindowLabel(window: LeaderboardWindow): string {
+export function getLeaderboardWindowLabel(window: LeaderboardView): string {
   if (window === "day") return "Daily (UTC)";
   if (window === "week") return "Weekly (UTC)";
+  if (window === "season") return "Season";
   return "All Time";
 }

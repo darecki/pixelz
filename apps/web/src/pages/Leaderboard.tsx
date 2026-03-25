@@ -13,13 +13,16 @@ import { supabase } from "../lib/supabase";
 import {
   formatBoardLabel,
   formatPerformanceDelta,
+  getCurrentSeason,
   getLeaderboardWindowLabel,
   getLeaderboardWindowStart,
   getRivalChallengeSummary,
   getRivalIds,
+  getSeasonTier,
+  getSeasonWindowStart,
   toggleRival,
   type GameId,
-  type LeaderboardWindow,
+  type LeaderboardView,
 } from "../lib/competition";
 
 type BoardMeta = {
@@ -69,9 +72,11 @@ export default function Leaderboard() {
     ? levelParam
     : getDefaultLevel(game);
   const justFinished = searchParams.get("justFinished") === "1";
-  const windowKey: LeaderboardWindow = windowParam === "day" || windowParam === "week" ? windowParam : "all";
+  const windowKey: LeaderboardView =
+    windowParam === "day" || windowParam === "week" || windowParam === "season" ? windowParam : "all";
   const scope = scopeParam === "rivals" ? "rivals" : "global";
   const isPixelz = game === "pixelz";
+  const season = getCurrentSeason();
 
   const [myBoardIds, setMyBoardIds] = useState<string[]>([]);
   const [myBoardsLoading, setMyBoardsLoading] = useState(false);
@@ -153,8 +158,17 @@ export default function Leaderboard() {
     const run = async () => {
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token ?? undefined;
-        const sinceIso = getLeaderboardWindowStart(windowKey)?.toISOString();
-        const result = await fetchLeaderboard(effectiveLevel, token, signal, windowKey, sinceIso);
+        const sinceIso =
+          windowKey === "season"
+            ? getSeasonWindowStart().toISOString()
+            : getLeaderboardWindowStart(windowKey)?.toISOString();
+        const result = await fetchLeaderboard(
+          effectiveLevel,
+          token,
+          signal,
+          windowKey === "season" ? "all" : windowKey,
+          sinceIso
+        );
         cleanupTimeout();
         if (!cancelled) {
           setData(result);
@@ -194,7 +208,7 @@ export default function Leaderboard() {
     });
   }
 
-  function setWindow(next: LeaderboardWindow) {
+  function setWindow(next: LeaderboardView) {
     setSearchParams((prev) => {
       const nextParams = new URLSearchParams(prev);
       if (next === "all") nextParams.delete("window");
@@ -248,6 +262,8 @@ export default function Leaderboard() {
     data.currentUserId
   );
   const colSpan = isPixelz ? 6 : 5;
+  const seasonMine = windowKey === "season" ? bestMine : null;
+  const seasonTier = seasonMine ? getSeasonTier(seasonMine.rank, data.entries.length) : null;
 
   return (
     <div className="page-container page-container--wide leaderboard-page">
@@ -256,7 +272,7 @@ export default function Leaderboard() {
         <h2>Leaderboard</h2>
         <p>
           {getLeaderboardWindowLabel(windowKey)} view for {game === "pixelz" ? "Pixelz" : "Reflex"}.
-          {windowKey !== "all" ? " Resets on a shared UTC boundary." : ""}
+          {windowKey === "season" ? ` ${season.label} is live now.` : windowKey !== "all" ? " Resets on a shared UTC boundary." : ""}
           {scope === "rivals" ? " Showing only your starred rivals and your own runs." : ""}
         </p>
       </div>
@@ -280,7 +296,7 @@ export default function Leaderboard() {
         </div>
 
         <div className="btn-group">
-          {(["all", "day", "week"] as const).map((option) => (
+          {(["all", "day", "week", "season"] as const).map((option) => (
             <button
               key={option}
               type="button"
@@ -427,6 +443,30 @@ export default function Leaderboard() {
                   : "Play a run to unlock your personal comparison cards."}
             </p>
           </article>
+          {windowKey === "season" && (
+            <article className="card personal-summary-card">
+              <p className="section-kicker">Season Standing</p>
+              <div className="personal-chip-row">
+                <div className="metric-chip">
+                  <span>Season</span>
+                  <strong>{season.shortLabel}</strong>
+                </div>
+                <div className="metric-chip">
+                  <span>Tier</span>
+                  <strong>{seasonTier ? seasonTier.name : "Unseeded"}</strong>
+                </div>
+                <div className="metric-chip">
+                  <span>Best season rank</span>
+                  <strong>{seasonMine ? `#${seasonMine.rank}` : "No season run yet"}</strong>
+                </div>
+              </div>
+              <p className="text-muted text-sm">
+                {seasonMine
+                  ? `You're sitting in ${seasonTier?.name ?? "Bronze"} for ${season.label}. Keep pushing before the quarter resets.`
+                  : "Play this level during the current season to place and unlock your tier."}
+              </p>
+            </article>
+          )}
           {rivalSummary && (
             <article className="card personal-summary-card">
               <p className="section-kicker">Rival Challenge</p>

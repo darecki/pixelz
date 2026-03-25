@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { fetchLeaderboard } from "../lib/api";
 import {
   formatCountdown,
+  getCompetitionProfile,
+  getCurrentSeason,
   getRivalChallengeSummary,
   getRivalIds,
   getCompetitionOverview,
@@ -64,6 +66,8 @@ export default function Home() {
 
   const dailyDateKey = useMemo(() => toDateKey(now), [now]);
   const daily = useMemo(() => getDailyChallenges(now), [now]);
+  const currentSeason = useMemo(() => getCurrentSeason(now), [now]);
+  const profile = useMemo(() => getCompetitionProfile(now), [dailyDateKey]);
   const rivalIds = useMemo(() => getRivalIds(), []);
   const dailyChallenges = useMemo(
     () => getDailyChallenges(new Date(`${dailyDateKey}T12:00:00Z`)).challenges,
@@ -152,6 +156,72 @@ export default function Home() {
             <strong>{overview.rivalsCount}</strong>
             <span className="text-muted text-sm">Star leaderboard players to build your hit list</span>
           </div>
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="section-heading-row">
+          <div>
+            <p className="section-kicker">Progression</p>
+            <h2>Season pressure and profile momentum</h2>
+          </div>
+          <Link to="/profile" className="btn btn-sm">
+            Open Profile
+          </Link>
+        </div>
+
+        <div className="leaderboard-summary-grid">
+          <article className="card personal-summary-card">
+            <p className="section-kicker">Current Season</p>
+            <div className="personal-chip-row">
+              <div className="metric-chip">
+                <span>Season</span>
+                <strong>{currentSeason.shortLabel}</strong>
+              </div>
+              <div className="metric-chip">
+                <span>Resets in</span>
+                <strong>{formatCountdown(currentSeason.resetInMs)}</strong>
+              </div>
+              <div className="metric-chip">
+                <span>Daily cycles</span>
+                <strong>{profile.seasonDailyCompletions}</strong>
+              </div>
+            </div>
+            <p className="text-muted text-sm">Quarter-long seasonal standings are now live on every leaderboard.</p>
+            <div className="leaderboard-actions">
+              <Link to="/leaderboard?window=season&game=reflex" className="btn btn-sm btn-primary">
+                Open Season Board
+              </Link>
+            </div>
+          </article>
+
+          <article className="card personal-summary-card">
+            <p className="section-kicker">Player Card</p>
+            <div className="personal-chip-row">
+              <div className="metric-chip">
+                <span>Total plays</span>
+                <strong>{profile.totalPlays}</strong>
+              </div>
+              <div className="metric-chip">
+                <span>PB boards</span>
+                <strong>{profile.pbBoards}</strong>
+              </div>
+              <div className="metric-chip">
+                <span>Achievements</span>
+                <strong>{profile.achievements.filter((achievement) => achievement.earned).length}</strong>
+              </div>
+            </div>
+            <p className="text-muted text-sm">
+              {profile.favoriteGame
+                ? `${profile.favoriteGame === "pixelz" ? "Pixelz" : "Reflex"} is currently your hottest game.`
+                : "Start playing to build your profile and unlock progression milestones."}
+            </p>
+            <div className="leaderboard-actions">
+              <Link to="/profile" className="btn btn-sm btn-primary">
+                View Full Profile
+              </Link>
+            </div>
+          </article>
         </div>
       </section>
 

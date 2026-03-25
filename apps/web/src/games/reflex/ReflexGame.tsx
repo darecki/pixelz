@@ -35,6 +35,11 @@ type ResultInsight = {
   nextTarget: { rank: number; timeMs: number } | null;
 };
 
+type GhostTarget = {
+  label: string;
+  timeMs: number;
+};
+
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
 const KEYBOARD_KEYS = ["q", "w", "e", "p"] as const;
 
@@ -62,6 +67,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const [levelProgress, setLevelProgress] = useState(() => getLevelProgress("reflex", levelId));
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
   const [rivalInsight, setRivalInsight] = useState<RivalChallengeSummary | null>(null);
+  const [ghostTarget, setGhostTarget] = useState<GhostTarget | null>(null);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -72,6 +78,23 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const deterministicSequenceRef = useRef<string[]>([]);
 
   const personalBest = levelProgress ? { moves: levelProgress.bestMoves, timeMs: levelProgress.bestTimeMs } : null;
+  const completedRounds =
+    phase === "finished" || phase === "saving" || phase === "prompting" || phase === "submitError"
+      ? totalRounds
+      : Math.max(0, round - 1);
+  const ghostTargetSplit = ghostTarget ? ghostTarget.timeMs / totalRounds : null;
+  const ghostPaceText = (() => {
+    if (!ghostTarget) return "Loading target pace";
+    if (completedRounds === 0 || cumulativeTimeMs === 0) {
+      return `Target split ${(ghostTargetSplit! / 1000).toFixed(2)}s`;
+    }
+    const expected = (ghostTarget.timeMs * completedRounds) / totalRounds;
+    const diff = cumulativeTimeMs - expected;
+    if (diff === 0) return `Dead even with ${ghostTarget.label}`;
+    return diff < 0
+      ? `${(Math.abs(diff) / 1000).toFixed(2)}s ahead of ${ghostTarget.label}`
+      : `${(diff / 1000).toFixed(2)}s behind ${ghostTarget.label}`;
+  })();
 
   const pickTargetColor = useCallback(
     (roundNumber: number) => {
@@ -99,11 +122,36 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     setLastResultWasBest(null);
     setLastSplitMs(null);
     setRivalInsight(null);
+    setGhostTarget(personalBest ? { label: "PB ghost", timeMs: personalBest.timeMs } : null);
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
       if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
     };
-  }, [levelId]);
+  }, [levelId, personalBest?.timeMs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLeaderboard(levelId)
+      .then((leaderboard) => {
+        if (cancelled) return;
+        if (personalBest) {
+          setGhostTarget({ label: "PB ghost", timeMs: personalBest.timeMs });
+          return;
+        }
+        const leader = leaderboard.entries[0];
+        if (leader) {
+          setGhostTarget({ label: "Leaderboard ghost", timeMs: leader.timeMs });
+        }
+      })
+      .catch(() => {
+        if (!cancelled && personalBest) {
+          setGhostTarget({ label: "PB ghost", timeMs: personalBest.timeMs });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [levelId, personalBest]);
 
   function startGame() {
     scoreSubmittedRef.current = false;
@@ -313,6 +361,10 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             <strong>{personalBest ? `${(personalBest.timeMs / 1000).toFixed(2)}s` : "Set your first benchmark"}</strong>
           </div>
           <div className="metric-chip">
+            <span>Ghost target</span>
+            <strong>{ghostTarget ? `${ghostTarget.label} · ${(ghostTarget.timeMs / 1000).toFixed(2)}s` : "Finding pace"}</strong>
+          </div>
+          <div className="metric-chip">
             <span>Pressure</span>
             <strong>Miss once and the run is over</strong>
           </div>
@@ -449,6 +501,12 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
                 <strong>{rivalInsight.chipText}</strong>
               </div>
             )}
+            {ghostTarget && (
+              <div className="metric-chip">
+                <span>Ghost result</span>
+                <strong>{ghostPaceText}</strong>
+              </div>
+            )}
           </div>
           {rivalInsight && <p className="text-muted text-sm">{rivalInsight.message}</p>}
         </div>
@@ -506,8 +564,16 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
           <strong>{personalBest ? `${(personalBest.timeMs / 1000).toFixed(2)}s` : "Set your first finish"}</strong>
         </div>
         <div className="metric-chip">
+          <span>Ghost target</span>
+          <strong>{ghostTarget ? `${ghostTarget.label} · ${(ghostTarget.timeMs / 1000).toFixed(2)}s` : "Finding pace"}</strong>
+        </div>
+        <div className="metric-chip">
           <span>Last split</span>
           <strong>{lastSplitMs != null ? `${(lastSplitMs / 1000).toFixed(2)}s` : "Waiting for first hit"}</strong>
+        </div>
+        <div className="metric-chip">
+          <span>Ghost pace</span>
+          <strong>{ghostPaceText}</strong>
         </div>
       </div>
       <div

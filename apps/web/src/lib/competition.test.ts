@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  getCompetitionProfile,
   getCompetitionOverview,
+  getCurrentSeason,
   getLeaderboardWindowStart,
   getRivalChallengeSummary,
+  getSeasonTier,
   recordCompetitionResult,
   toDateKey,
 } from "./competition";
@@ -103,5 +106,45 @@ describe("competition UTC daily helpers", () => {
     expect(summary?.status).toBe("unplayed");
     expect(summary?.chipText).toContain("Ari");
     expect(summary?.message).toContain("Put up your first answer");
+  });
+
+  it("builds the current quarter season using UTC boundaries", () => {
+    const season = getCurrentSeason(new Date("2026-05-15T12:00:00Z"));
+    expect(season.id).toBe("2026-q2");
+    expect(season.start.toISOString()).toBe("2026-04-01T00:00:00.000Z");
+    expect(season.end.toISOString()).toBe("2026-07-01T00:00:00.000Z");
+  });
+
+  it("derives season tiers from rank and field size", () => {
+    expect(getSeasonTier(1, 100).name).toBe("Legend");
+    expect(getSeasonTier(8, 100).name).toBe("Diamond");
+    expect(getSeasonTier(30, 100).name).toBe("Gold");
+    expect(getSeasonTier(55, 100).name).toBe("Silver");
+    expect(getSeasonTier(null, 100).name).toBe("Bronze");
+  });
+
+  it("aggregates a usable competition profile from local progress", () => {
+    recordCompetitionResult({
+      gameId: "pixelz",
+      levelId: "pixelz_level_1",
+      moves: 10,
+      timeMs: 20000,
+      dailyChallenge: true,
+      completedAt: new Date("2026-04-02T12:00:00Z"),
+    });
+    recordCompetitionResult({
+      gameId: "reflex",
+      levelId: "reflex_level_1",
+      moves: 10,
+      timeMs: 4000,
+      completedAt: new Date("2026-04-03T12:00:00Z"),
+    });
+
+    const profile = getCompetitionProfile(new Date("2026-04-03T18:00:00Z"));
+    expect(profile.totalPlays).toBe(2);
+    expect(profile.pbBoards).toBe(2);
+    expect(profile.favoriteGame).toBe("pixelz");
+    expect(profile.currentSeason.id).toBe("2026-q2");
+    expect(profile.achievements.find((achievement) => achievement.id === "dual-threat")?.earned).toBe(true);
   });
 });
