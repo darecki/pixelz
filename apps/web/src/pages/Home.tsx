@@ -36,7 +36,7 @@ export default function Home() {
   const dailyChallenges = useMemo(() => daily.challenges, [daily]);
   const overview = useMemo(() => getCompetitionOverview(now), [now]);
   const challengeByGame = useMemo(
-    () => Object.fromEntries(dailyChallenges.map((challenge) => [challenge.gameId, challenge])) as Record<GameId, typeof dailyChallenges[number]>,
+    () => Object.fromEntries(dailyChallenges.map((challenge) => [challenge.gameId, challenge])) as Partial<Record<GameId, typeof dailyChallenges[number]>>,
     [dailyChallenges]
   );
 
@@ -79,7 +79,7 @@ export default function Home() {
           const gameCopy = GAME_COPY[gameId];
           const progress = getLevelProgress(gameId, getQuickPlayLevel(gameId));
           const challenge = challengeByGame[gameId];
-          const completedToday = overview.completedToday.includes(gameId);
+          const completedToday = Boolean(challenge) && overview.completedToday.includes(gameId);
 
           return (
             <article key={gameId} className="card card--interactive chooser-card">
@@ -94,13 +94,17 @@ export default function Home() {
                     <p className="game-card-desc chooser-card-copy">{gameCopy.subtitle}</p>
                   </div>
                   <span className={`status-pill ${completedToday ? "status-pill--success" : ""}`}>
-                    {completedToday ? "Daily done" : "Daily live"}
+                    {challenge ? (completedToday ? "Daily done" : "Daily live") : "Quick queue"}
                   </span>
                 </div>
 
                 <div className="chooser-card-meta">
                   <span className="mini-stat">
-                    Today: <strong>{challenge.label}</strong>
+                    {challenge ? (
+                      <>Today: <strong>{challenge.label}</strong></>
+                    ) : (
+                      <>Mode: <strong>Quick Play</strong></>
+                    )}
                   </span>
                   <span className="mini-stat">
                     PB: <strong>{progress ? formatPersonalBest(gameId, progress) : "none"}</strong>
@@ -114,12 +118,14 @@ export default function Home() {
                   >
                     Quick Play
                   </Link>
-                  <Link
-                    to={`/play?game=${gameId}&level=${encodeURIComponent(challenge.levelId)}&daily=1`}
-                    className="btn"
-                  >
-                    Today&apos;s Challenge
-                  </Link>
+                  {challenge && (
+                    <Link
+                      to={`/play?game=${gameId}&level=${encodeURIComponent(challenge.levelId)}&daily=1`}
+                      className="btn"
+                    >
+                      Today&apos;s Challenge
+                    </Link>
+                  )}
                   <Link to={`/configure/${gameId}?mode=solo`} className="home-shortcut-link">
                     More options
                   </Link>

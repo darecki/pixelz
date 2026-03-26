@@ -1,9 +1,12 @@
 import {
+  getDailyPixelzBoardSpec,
+  isDailyPixelzBoardId,
   PIXELZ_LEVEL_IDS,
   PIXELZ_LEVELS,
   REFLEX_LEVEL_IDS,
   REFLEX_LEVELS,
   isPredefinedPixelzLevel,
+  parseDailyPixelzBoardDateKey,
   type PixelzLevelId,
   type ReflexLevelId,
 } from "@pixelz/shared";
@@ -134,17 +137,17 @@ export const PIXELZ_PRESET_CHALLENGES = [
   {
     levelId: PIXELZ_LEVEL_IDS[0],
     label: "Warm-Up",
-    description: "Low-pressure opener for quick solo runs.",
+    description: "Compact official board for fast, low-commitment runs.",
   },
   {
     levelId: PIXELZ_LEVEL_IDS[4],
-    label: "Competitive",
-    description: "Balanced official board for chasing clean wins.",
+    label: "Mainline",
+    description: "Core official board when you want the standard Pixelz lane.",
   },
   {
     levelId: PIXELZ_LEVEL_IDS[9],
-    label: "Endurance",
-    description: "Longer board for leaderboard grinders.",
+    label: "Alternate",
+    description: "Another official layout for mixing up your route planning.",
   },
 ] as const;
 
@@ -288,12 +291,6 @@ function writeState(state: CompetitionState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function dayOfYear(date: Date): number {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 0));
-  const diff = date.getTime() - start.getTime();
-  return Math.floor(diff / 86_400_000);
-}
-
 function rivalName(entry: RivalLeaderboardEntry): string {
   return entry.nickname ?? entry.userId.slice(0, 8);
 }
@@ -401,37 +398,29 @@ export function getQuickPlayLevel(gameId: GameId): string {
   return gameId === "pixelz" ? PIXELZ_LEVEL_IDS[0] : REFLEX_LEVEL_IDS[1];
 }
 
-export function getDailyChallenge(gameId: GameId, now = new Date()): DailyChallenge {
-  const index = dayOfYear(now);
+export function getDailyChallenge(gameId: GameId, now = new Date()): DailyChallenge | null {
   const dateKey = toDateKey(now);
   if (gameId === "pixelz") {
-    const levelId = PIXELZ_LEVEL_IDS[index % PIXELZ_LEVEL_IDS.length];
+    const board = getDailyPixelzBoardSpec(now);
     return {
       gameId,
-      levelId,
+      levelId: board.boardId,
       label: "Daily Pixelz",
-      subtitle: `${PIXELZ_LEVELS[levelId]} · solve clean and fast`,
+      subtitle: "Fresh generated board. Same layout for everyone today.",
       dateKey,
     };
   }
-
-  const levelId = REFLEX_LEVEL_IDS[index % REFLEX_LEVEL_IDS.length];
-  return {
-    gameId,
-    levelId,
-    label: "Daily Reflex",
-    subtitle: `${REFLEX_LEVELS[levelId as ReflexLevelId]} rounds · one chance to pop off`,
-    dateKey,
-  };
+  return null;
 }
 
 export function getDailyChallenges(now = new Date()) {
   const tomorrow = new Date(now);
   tomorrow.setUTCHours(24, 0, 0, 0);
+  const pixelzDaily = getDailyChallenge("pixelz", now);
   return {
     dateKey: toDateKey(now),
     resetInMs: tomorrow.getTime() - now.getTime(),
-    challenges: [getDailyChallenge("pixelz", now), getDailyChallenge("reflex", now)],
+    challenges: pixelzDaily ? [pixelzDaily] : [],
   };
 }
 
@@ -669,6 +658,10 @@ export function formatBoardLabel(levelId: string, settings?: BoardSettings): str
   if (levelId.startsWith("reflex_")) {
     const rounds = REFLEX_LEVELS[levelId as ReflexLevelId];
     return rounds ? `${rounds} rounds` : "Reflex challenge";
+  }
+  if (isDailyPixelzBoardId(levelId)) {
+    const dateKey = parseDailyPixelzBoardDateKey(levelId);
+    return dateKey ? `Daily board · ${dateKey}` : "Daily board";
   }
   if (isPredefinedPixelzLevel(levelId)) {
     return PIXELZ_LEVELS[levelId as PixelzLevelId];

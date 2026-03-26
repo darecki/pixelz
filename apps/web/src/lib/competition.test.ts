@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   describeSessionFormat,
   formatPerformanceDelta,
+  formatBoardLabel,
   getCompetitionProfile,
   getCompetitionOverview,
   getCurrentSeason,
+  getDailyChallenge,
+  getDailyChallenges,
   getLeaderboardWindowStart,
   getRivalChallengeSummary,
   getSeriesMeta,
@@ -58,6 +61,17 @@ describe("competition UTC daily helpers", () => {
 
     expect(getCompetitionOverview(new Date("2026-03-25T23:45:00Z")).completedToday).toContain("pixelz");
     expect(getCompetitionOverview(new Date("2026-03-26T00:15:00Z")).completedToday).not.toContain("pixelz");
+  });
+
+  it("creates a shared generated Pixelz daily board and skips Reflex daily challenges", () => {
+    const pixelzDaily = getDailyChallenge("pixelz", new Date("2026-03-26T18:00:00Z"));
+    const reflexDaily = getDailyChallenge("reflex", new Date("2026-03-26T18:00:00Z"));
+    const dailySet = getDailyChallenges(new Date("2026-03-26T18:00:00Z"));
+
+    expect(pixelzDaily?.levelId).toBe("pixelz_daily_2026-03-26");
+    expect(pixelzDaily?.subtitle).toContain("Fresh generated board");
+    expect(reflexDaily).toBeNull();
+    expect(dailySet.challenges).toHaveLength(1);
   });
 
   it("keeps the streak alive at the start of a new UTC day until the player misses a full cycle", () => {
@@ -140,6 +154,10 @@ describe("competition UTC daily helpers", () => {
   it("describes identical runs as exactly tied", () => {
     expect(formatPerformanceDelta("reflex", { moves: 5, timeMs: 4321 }, { moves: 5, timeMs: 4321 })).toBe("exactly tied");
     expect(formatPerformanceDelta("pixelz", { moves: 12, timeMs: 12345 }, { moves: 12, timeMs: 12345 })).toBe("exactly tied");
+  });
+
+  it("formats daily board labels clearly", () => {
+    expect(formatBoardLabel("pixelz_daily_2026-03-26")).toBe("Daily board · 2026-03-26");
   });
 
   it("sanitizes corrupted stored competition state without dropping valid custom boards", () => {

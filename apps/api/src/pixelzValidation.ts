@@ -1,4 +1,4 @@
-import { replayPixelzMoveSequence, type PixelzBoardSpec } from "@pixelz/shared";
+import { getDailyPixelzBoardSpec, isDailyPixelzBoardId, replayPixelzMoveSequence, type PixelzBoardSpec } from "@pixelz/shared";
 
 type SqlExecutor = any;
 
@@ -26,6 +26,16 @@ export async function getPixelzBoardSpec(
   executor: SqlExecutor,
   levelId: string
 ): Promise<PixelzBoardSpec | null> {
+  if (isDailyPixelzBoardId(levelId)) {
+    const board = getDailyPixelzBoardSpec(levelId);
+    return {
+      width: board.width,
+      height: board.height,
+      numColors: board.numColors,
+      seed: board.seed,
+    };
+  }
+
   const rows = await executor`
     select width, height, num_colors, seed
     from public.boards

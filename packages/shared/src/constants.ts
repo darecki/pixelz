@@ -36,6 +36,10 @@ export function computeScore(moves: number, timeMs: number): number {
 export const PIXELZ_SCORE_MOVE_PENALTY = 10_000;
 
 export const PIXELZ_BOARD_ID_PREFIX = "pixelz_";
+export const DAILY_PIXELZ_BOARD_ID_PREFIX = `${PIXELZ_BOARD_ID_PREFIX}daily_`;
+export const DAILY_PIXELZ_BOARD_WIDTH = 7;
+export const DAILY_PIXELZ_BOARD_HEIGHT = 10;
+export const DAILY_PIXELZ_BOARD_NUM_COLORS = 5;
 
 /** Predefined Pixelz level ids (level 1–10); same board for everyone. */
 export const PIXELZ_LEVEL_IDS = [
@@ -73,6 +77,40 @@ export function isPixelzBoardId(levelId: string): boolean {
 
 export function isPredefinedPixelzLevel(levelId: string): levelId is PixelzLevelId {
   return (PIXELZ_LEVEL_IDS as readonly string[]).includes(levelId);
+}
+
+export function isDailyPixelzBoardId(levelId: string): boolean {
+  return /^pixelz_daily_\d{4}-\d{2}-\d{2}$/.test(levelId);
+}
+
+export function toUtcDateKey(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseDailyPixelzBoardDateKey(levelId: string): string | null {
+  return isDailyPixelzBoardId(levelId) ? levelId.slice(DAILY_PIXELZ_BOARD_ID_PREFIX.length) : null;
+}
+
+export function getDailyPixelzBoardId(date = new Date()): string {
+  return `${DAILY_PIXELZ_BOARD_ID_PREFIX}${toUtcDateKey(date)}`;
+}
+
+export function getDailyPixelzBoardSpec(input: Date | string = new Date()) {
+  const dateKey = input instanceof Date
+    ? toUtcDateKey(input)
+    : parseDailyPixelzBoardDateKey(input) ?? input;
+
+  return {
+    boardId: `${DAILY_PIXELZ_BOARD_ID_PREFIX}${dateKey}`,
+    dateKey,
+    width: DAILY_PIXELZ_BOARD_WIDTH,
+    height: DAILY_PIXELZ_BOARD_HEIGHT,
+    numColors: DAILY_PIXELZ_BOARD_NUM_COLORS,
+    seed: `pixelz-daily:${dateKey}`,
+  };
 }
 
 /**

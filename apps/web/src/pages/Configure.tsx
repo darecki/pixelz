@@ -266,7 +266,7 @@ export default function Configure() {
             <p className="section-kicker">Daily Challenge</p>
             <h3>{dailyChallenge.label}</h3>
             <p className="text-secondary">{dailyChallenge.subtitle}</p>
-            <p className="text-muted text-sm">Shared worldwide board. Resets at 00:00 UTC.</p>
+            <p className="text-muted text-sm">Randomly generated once per UTC day. Same board for everyone worldwide.</p>
           </div>
           <Link
             to={`/play?game=${selectedGame.id}&level=${encodeURIComponent(dailyChallenge.levelId)}&daily=1`}
@@ -376,7 +376,10 @@ export default function Configure() {
                 <div className="section-heading-row">
                   <div>
                     <p className="section-kicker">Recent Boards</p>
-                    <h3>Your replay library</h3>
+                    <h3>Your board library</h3>
+                    <p className="text-secondary text-sm">
+                      Reopen boards you&apos;ve played before. Solve replay playback lives on the post-run result screen.
+                    </p>
                   </div>
                 </div>
                 {myBoardsLoading || hasSession === null ? (
@@ -396,7 +399,7 @@ export default function Configure() {
                               to={`/play?game=pixelz&level=${encodeURIComponent(boardId)}`}
                               className="btn btn-sm btn-success"
                             >
-                              Replay
+                              Play again
                             </Link>
                             <button type="button" onClick={() => copyBoardLink(boardId)} className="btn btn-sm">
                               {copiedId === boardId ? "Copied!" : "Copy link"}
@@ -440,64 +443,79 @@ export default function Configure() {
             </div>
           </div>
 
-          <div className="card multiplayer-summary-card">
-            <div className="metric-chip">
-              <span>Format</span>
-              <strong>{seriesLength === 3 ? "Best of 3" : "Single match"}</strong>
+          <div className="card config-inline-card mb-md">
+            <div className="config-inline-row">
+              <div className="config-inline-copy">
+                <p className="config-inline-kicker">Max Players</p>
+                <h4>Lobby size</h4>
+                <p className="text-secondary text-sm">Set how many players can join this invite.</p>
+              </div>
+              <div className="config-inline-control">
+                <input
+                  id="invite-max-players"
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={inviteMaxPlayers}
+                  onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
+                  className="input input--inline"
+                  style={{ width: 88 }}
+                  aria-label="Max Players"
+                />
+              </div>
             </div>
-            <div className="metric-chip">
-              <span>Players</span>
-              <strong>Up to {inviteMaxPlayers}</strong>
+            <div className="config-inline-row">
+              <div className="config-inline-copy">
+                <p className="config-inline-kicker">Format</p>
+                <h4>Match length</h4>
+                <p className="text-secondary text-sm">Pick a one-off duel or a best-of-three set.</p>
+              </div>
+              <div className="config-inline-control">
+                <div className="btn-group">
+                  <button
+                    type="button"
+                    onClick={() => setSeriesLength(1)}
+                    className={`btn-toggle ${seriesLength === 1 ? "btn-toggle--active" : ""}`}
+                  >
+                    Single Match
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSeriesLength(3)}
+                    className={`btn-toggle ${seriesLength === 3 ? "btn-toggle--active" : ""}`}
+                  >
+                    Best of 3
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="metric-chip">
-              <span>Ready check</span>
-              <strong>Live lobby</strong>
-            </div>
-          </div>
-
-          <div className="config-row mb-md">
-            <label className="text-sm" htmlFor="invite-max-players">
-              Max Players{" "}
-            </label>
-            <input
-              id="invite-max-players"
-              type="number"
-              min={2}
-              max={10}
-              value={inviteMaxPlayers}
-              onChange={(e) => setInviteMaxPlayers(clampInviteMaxPlayers(Number(e.target.value)))}
-              className="input input--inline"
-              style={{ width: 72 }}
-            />
-            <div className="btn-group">
-              <button
-                type="button"
-                onClick={() => setSeriesLength(1)}
-                className={`btn-toggle ${seriesLength === 1 ? "btn-toggle--active" : ""}`}
-              >
-                Single Match
-              </button>
-              <button
-                type="button"
-                onClick={() => setSeriesLength(3)}
-                className={`btn-toggle ${seriesLength === 3 ? "btn-toggle--active" : ""}`}
-              >
-                Best of 3
-              </button>
+            <div className="config-inline-row">
+              <div className="config-inline-copy">
+                <p className="config-inline-kicker">Ready Check</p>
+                <h4>Lobby flow</h4>
+                <p className="text-secondary text-sm">Players join first, then confirm before the run starts.</p>
+              </div>
+              <div className="config-inline-control">
+                <span className="config-inline-value">Live lobby</span>
+              </div>
             </div>
           </div>
 
           {selectedGame.id === "reflex" ? (
-            <div className="card">
-              <p className="text-secondary text-sm mb-sm">Choose the duel length before you create the lobby.</p>
-              <div className="config-row">
-                <label className="text-sm">
-                  Level{" "}
+            <div className="card config-inline-card">
+              <div className="config-inline-row">
+                <div className="config-inline-copy">
+                  <p className="config-inline-kicker">Reflex</p>
+                  <h4>Duel length</h4>
+                  <p className="text-secondary text-sm">Choose how many rounds players need to clear.</p>
+                </div>
+              <div className="config-inline-control">
                   <select
                     value={inviteReflexLevel}
                     onChange={(e) => setInviteReflexLevel(e.target.value)}
                     className="input input--inline"
                     style={{ width: 180 }}
+                    aria-label="Reflex level"
                   >
                     {selectedGame.levelIds.map((id) => (
                       <option key={id} value={id}>
@@ -505,15 +523,15 @@ export default function Configure() {
                       </option>
                     ))}
                   </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={handleCreateReflexInvite}
-                  disabled={inviteCreating}
-                  className="btn btn-primary"
-                >
-                  {inviteCreating ? "Creating invite…" : "Create invite"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateReflexInvite}
+                    disabled={inviteCreating}
+                    className="btn btn-primary"
+                  >
+                    {inviteCreating ? "Creating invite…" : "Create invite"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

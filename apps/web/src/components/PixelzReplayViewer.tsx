@@ -129,6 +129,9 @@ export default function PixelzReplayViewer({ board, moveSequence, title = "Repla
           Next
         </button>
       </div>
+      <p className="text-muted text-sm replay-help">
+        Replay shows the move sequence for this exact board. Use Autoplay for the full solve, or step through move by move with Back and Next.
+      </p>
     </div>
   );
 }

@@ -1,13 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
+  DAILY_PIXELZ_BOARD_HEIGHT,
+  DAILY_PIXELZ_BOARD_NUM_COLORS,
+  DAILY_PIXELZ_BOARD_WIDTH,
   GAME,
   computeScore,
   computePixelzScore,
+  getDailyPixelzBoardId,
+  getDailyPixelzBoardSpec,
   isPixelzBoardId,
+  isDailyPixelzBoardId,
   isPredefinedPixelzLevel,
+  parseDailyPixelzBoardDateKey,
   PIXELZ_LEVEL_IDS,
   REFLEX_LEVEL_IDS,
   REFLEX_LEVELS,
+  toUtcDateKey,
 } from "./constants.js";
 
 describe("computeScore", () => {
@@ -60,6 +68,30 @@ describe("isPredefinedPixelzLevel", () => {
   it("returns false for custom board ids", () => {
     expect(isPredefinedPixelzLevel("pixelz_abc123")).toBe(false);
     expect(isPredefinedPixelzLevel("reflex_level_1")).toBe(false);
+  });
+});
+
+describe("daily Pixelz boards", () => {
+  it("builds a stable daily board id from the UTC date", () => {
+    expect(getDailyPixelzBoardId(new Date("2026-03-26T23:30:00-05:00"))).toBe("pixelz_daily_2026-03-27");
+    expect(toUtcDateKey(new Date("2026-03-26T00:30:00+02:00"))).toBe("2026-03-25");
+  });
+
+  it("recognizes and parses daily board ids", () => {
+    expect(isDailyPixelzBoardId("pixelz_daily_2026-03-26")).toBe(true);
+    expect(parseDailyPixelzBoardDateKey("pixelz_daily_2026-03-26")).toBe("2026-03-26");
+    expect(isDailyPixelzBoardId("pixelz_daily_bad")).toBe(false);
+  });
+
+  it("derives a deterministic daily board spec", () => {
+    expect(getDailyPixelzBoardSpec("pixelz_daily_2026-03-26")).toEqual({
+      boardId: "pixelz_daily_2026-03-26",
+      dateKey: "2026-03-26",
+      width: DAILY_PIXELZ_BOARD_WIDTH,
+      height: DAILY_PIXELZ_BOARD_HEIGHT,
+      numColors: DAILY_PIXELZ_BOARD_NUM_COLORS,
+      seed: "pixelz-daily:2026-03-26",
+    });
   });
 });
 

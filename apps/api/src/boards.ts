@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { PIXELZ_BOARD_ID_PREFIX } from "@pixelz/shared";
+import { getDailyPixelzBoardSpec, isDailyPixelzBoardId, PIXELZ_BOARD_ID_PREFIX } from "@pixelz/shared";
 import { sql } from "./db.js";
 
 const DEFAULT_WIDTH = 7;
@@ -60,6 +60,17 @@ export async function handleGetBoard(c: Context): Promise<Response> {
   const boardId = c.req.param("boardId");
   if (!boardId) {
     return c.json({ error: "Missing boardId" }, 400);
+  }
+
+  if (isDailyPixelzBoardId(boardId)) {
+    const board = getDailyPixelzBoardSpec(boardId);
+    return c.json({
+      boardId: board.boardId,
+      width: board.width,
+      height: board.height,
+      numColors: board.numColors,
+      seed: board.seed,
+    });
   }
 
   const rows = await sql`
