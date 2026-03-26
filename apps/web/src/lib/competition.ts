@@ -1,0 +1,753 @@
+import {
+  PIXELZ_LEVEL_IDS,
+  PIXELZ_LEVELS,
+  REFLEX_LEVEL_IDS,
+  REFLEX_LEVELS,
+  isPredefinedPixelzLevel,
+  type PixelzLevelId,
+  type ReflexLevelId,
+} from "@pixelz/shared";
+
+export type GameId = "pixelz" | "reflex";
+export type LeaderboardWindow = "all" | "day" | "week";
+export type LeaderboardView = LeaderboardWindow | "season";
+
+type ResultSnapshot = {
+  moves: number;
+  timeMs: number;
+};
+
+export type RivalLeaderboardEntry = {
+  userId: string;
+  nickname: string | null;
+  rank: number;
+  moves: number;
+  timeMs: number;
+};
+
+export type RivalChallengeSummary = {
+  gameId: GameId;
+  rivalUserId: string;
+  rivalName: string;
+  rank: number;
+  status: "ahead" | "behind" | "tied" | "unplayed";
+  chipText: string;
+  message: string;
+};
+
+export type SeasonMeta = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  start: Date;
+  end: Date;
+  resetInMs: number;
+};
+
+export type SeasonTier = {
+  name: "Legend" | "Diamond" | "Gold" | "Silver" | "Bronze";
+  accent: "success" | "accent" | "warning" | "muted";
+};
+
+export type ProfileAchievement = {
+  id: string;
+  label: string;
+  description: string;
+  earned: boolean;
+};
+
+export type CompetitionProfile = {
+  totalPlays: number;
+  pbBoards: number;
+  dailyCyclesCompleted: number;
+  currentStreak: number;
+  rivalsCount: number;
+  favoriteGame: GameId | null;
+  currentSeason: SeasonMeta;
+  seasonDailyCompletions: number;
+  recentlyPlayed: Array<{
+    gameId: GameId;
+    levelId: string;
+    bestMoves: number;
+    bestTimeMs: number;
+    plays: number;
+    lastPlayedAt: string;
+  }>;
+  achievements: ProfileAchievement[];
+};
+
+type LevelProgress = {
+  bestMoves: number;
+  bestTimeMs: number;
+  lastMoves: number;
+  lastTimeMs: number;
+  plays: number;
+  lastPlayedAt: string;
+};
+
+type CompetitionState = {
+  version: 1;
+  levels: Record<string, LevelProgress>;
+  dailyCompletions: Record<string, GameId[]>;
+  rivals: string[];
+};
+
+type BoardSettings = {
+  width?: number;
+  height?: number;
+  numColors?: number;
+  rounds?: number;
+  seriesLength?: number;
+  currentRound?: number;
+  seriesWins?: Record<string, number>;
+};
+
+type RecordCompetitionResultInput = {
+  gameId: GameId;
+  levelId: string;
+  moves: number;
+  timeMs: number;
+  completedAt?: Date;
+  dailyChallenge?: boolean;
+};
+
+type DailyChallenge = {
+  gameId: GameId;
+  levelId: string;
+  label: string;
+  subtitle: string;
+  dateKey: string;
+};
+
+const STORAGE_KEY = "pixelz_competition_state_v1";
+
+function createDefaultState(): CompetitionState {
+  return {
+    version: 1,
+    levels: {},
+    dailyCompletions: {},
+    rivals: [],
+  };
+}
+
+export const PIXELZ_PRESET_CHALLENGES = [
+  {
+    levelId: PIXELZ_LEVEL_IDS[0],
+    label: "Warm-Up",
+    description: "Low-pressure opener for quick solo runs.",
+  },
+  {
+    levelId: PIXELZ_LEVEL_IDS[4],
+    label: "Competitive",
+    description: "Balanced official board for chasing clean wins.",
+  },
+  {
+    levelId: PIXELZ_LEVEL_IDS[9],
+    label: "Endurance",
+    description: "Longer board for leaderboard grinders.",
+  },
+] as const;
+
+export const REFLEX_PRESET_CHALLENGES = [
+  {
+    levelId: REFLEX_LEVEL_IDS[0],
+    label: "Sprint",
+    description: "Short race to warm up your reflexes.",
+  },
+  {
+    levelId: REFLEX_LEVEL_IDS[1],
+    label: "Ranked Run",
+    description: "The standard duel format for fast rematches.",
+  },
+  {
+    levelId: REFLEX_LEVEL_IDS[3],
+    label: "Gauntlet",
+    description: "Longer set for consistency under pressure.",
+  },
+] as const;
+
+function gameFromLevelKey(key: string): GameId {
+  return key.startsWith("pixelz:") ? "pixelz" : "reflex";
+}
+
+function compareResults(gameId: GameId, a: ResultSnapshot, b: ResultSnapshot): number {
+  if (gameId === "pixelz") {
+    if (a.moves !== b.moves) return a.moves - b.moves;
+    return a.timeMs - b.timeMs;
+  }
+  return a.timeMs - b.timeMs;
+}
+
+function levelKey(gameId: GameId, levelId: string): string {
+  return `${gameId}:${levelId}`;
+}
+
+function parseStoredLevelKey(key: string): { gameId: GameId; levelId: string } | null {
+  if (key.startsWith("pixelz:")) {
+    const levelId = key.slice("pixelz:".length);
+    return levelId ? { gameId: "pixelz", levelId } : null;
+  }
+  if (key.startsWith("reflex:")) {
+    const levelId = key.slice("reflex:".length);
+    return levelId ? { gameId: "reflex", levelId } : null;
+  }
+  return null;
+}
+
+function toStoredNonNegativeInt(value: unknown): number | null {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.trunc(numeric));
+}
+
+function toStoredIsoString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function normalizeLevelProgress(value: unknown): LevelProgress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Partial<LevelProgress>;
+  const bestMoves = toStoredNonNegativeInt(raw.bestMoves);
+  const bestTimeMs = toStoredNonNegativeInt(raw.bestTimeMs);
+  const lastMoves = toStoredNonNegativeInt(raw.lastMoves);
+  const lastTimeMs = toStoredNonNegativeInt(raw.lastTimeMs);
+  const plays = toStoredNonNegativeInt(raw.plays);
+  const lastPlayedAt = toStoredIsoString(raw.lastPlayedAt);
+
+  if (
+    bestMoves == null ||
+    bestTimeMs == null ||
+    lastMoves == null ||
+    lastTimeMs == null ||
+    plays == null ||
+    lastPlayedAt == null
+  ) {
+    return null;
+  }
+
+  return {
+    bestMoves,
+    bestTimeMs,
+    lastMoves,
+    lastTimeMs,
+    plays,
+    lastPlayedAt,
+  };
+}
+
+function isValidDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && toDateKey(parsed) === value;
+}
+
+function normalizeState(value: unknown): CompetitionState {
+  if (!value || typeof value !== "object") return createDefaultState();
+  const raw = value as Partial<CompetitionState>;
+  const rawLevels = raw.levels && typeof raw.levels === "object" ? raw.levels : {};
+  const rawDailyCompletions =
+    raw.dailyCompletions && typeof raw.dailyCompletions === "object" ? raw.dailyCompletions : {};
+  const levels = Object.fromEntries(
+    Object.entries(rawLevels).flatMap(([key, levelValue]) => {
+      if (parseStoredLevelKey(key) == null) return [];
+      const normalized = normalizeLevelProgress(levelValue);
+      return normalized ? [[key, normalized] as const] : [];
+    })
+  );
+  const dailyCompletions = Object.fromEntries(
+    Object.entries(rawDailyCompletions).flatMap(([dateKey, games]) => {
+      if (!isValidDateKey(dateKey) || !Array.isArray(games)) return [];
+      const validGames = Array.from(new Set(games.filter((game): game is GameId => game === "pixelz" || game === "reflex")));
+      return validGames.length > 0 ? [[dateKey, validGames] as const] : [];
+    })
+  );
+  return {
+    version: 1,
+    levels,
+    dailyCompletions,
+    rivals: Array.isArray(raw.rivals) ? raw.rivals.filter((id): id is string => typeof id === "string") : [],
+  };
+}
+
+function readState(): CompetitionState {
+  if (typeof localStorage === "undefined") return createDefaultState();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createDefaultState();
+    return normalizeState(JSON.parse(raw));
+  } catch {
+    return createDefaultState();
+  }
+}
+
+function writeState(state: CompetitionState) {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function dayOfYear(date: Date): number {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 0));
+  const diff = date.getTime() - start.getTime();
+  return Math.floor(diff / 86_400_000);
+}
+
+function rivalName(entry: RivalLeaderboardEntry): string {
+  return entry.nickname ?? entry.userId.slice(0, 8);
+}
+
+function formatResultLine(gameId: GameId, result: ResultSnapshot): string {
+  if (gameId === "pixelz") {
+    return `${result.moves} moves · ${(result.timeMs / 1000).toFixed(2)}s`;
+  }
+  return `${(result.timeMs / 1000).toFixed(2)}s`;
+}
+
+function getRivalGap(gameId: GameId, current: ResultSnapshot, target: ResultSnapshot) {
+  if (gameId === "pixelz" && current.moves !== target.moves) {
+    const moveDiff = current.moves - target.moves;
+    return {
+      status: moveDiff < 0 ? "ahead" : "behind",
+      text: `${Math.abs(moveDiff)} move${Math.abs(moveDiff) === 1 ? "" : "s"} ${moveDiff < 0 ? "ahead" : "behind"}`,
+      distance: Math.abs(moveDiff) * 1_000_000 + Math.abs(current.timeMs - target.timeMs),
+    } as const;
+  }
+
+  const timeDiff = current.timeMs - target.timeMs;
+  if (timeDiff === 0) {
+    return {
+      status: "tied",
+      text: "Tied",
+      distance: 0,
+    } as const;
+  }
+
+  return {
+    status: timeDiff < 0 ? "ahead" : "behind",
+    text: `${(Math.abs(timeDiff) / 1000).toFixed(2)}s ${timeDiff < 0 ? "ahead" : "behind"}`,
+    distance: Math.abs(timeDiff),
+  } as const;
+}
+
+function addDays(dateKey: string, delta: number): string {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return toDateKey(date);
+}
+
+export function toDateKey(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function formatCountdown(ms: number): string {
+  const safe = Math.max(0, ms);
+  const totalSeconds = Math.floor(safe / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => `${value}`.padStart(2, "0")).join(":");
+}
+
+export function getLeaderboardWindowStart(window: LeaderboardWindow, now = new Date()): Date | null {
+  if (window === "all") return null;
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  if (window === "week") {
+    start.setUTCDate(start.getUTCDate() - 6);
+  }
+  return start;
+}
+
+export function getCurrentSeason(now = new Date()): SeasonMeta {
+  const year = now.getUTCFullYear();
+  const quarterIndex = Math.floor(now.getUTCMonth() / 3);
+  const quarterNumber = quarterIndex + 1;
+  const start = new Date(Date.UTC(year, quarterIndex * 3, 1, 0, 0, 0, 0));
+  const end =
+    quarterIndex === 3
+      ? new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
+      : new Date(Date.UTC(year, quarterIndex * 3 + 3, 1, 0, 0, 0, 0));
+
+  return {
+    id: `${year}-q${quarterNumber}`,
+    label: `Season ${year} · Q${quarterNumber}`,
+    shortLabel: `Q${quarterNumber} ${year}`,
+    start,
+    end,
+    resetInMs: Math.max(0, end.getTime() - now.getTime()),
+  };
+}
+
+export function getSeasonWindowStart(now = new Date()): Date {
+  return getCurrentSeason(now).start;
+}
+
+export function getSeasonTier(rank: number | null, totalEntries: number): SeasonTier {
+  if (!rank || totalEntries <= 0) return { name: "Bronze", accent: "muted" };
+  const percentile = (1 - (rank - 1) / Math.max(totalEntries, 1)) * 100;
+  if (rank === 1 || percentile >= 99) return { name: "Legend", accent: "success" };
+  if (percentile >= 90) return { name: "Diamond", accent: "accent" };
+  if (percentile >= 65) return { name: "Gold", accent: "warning" };
+  if (percentile >= 35) return { name: "Silver", accent: "muted" };
+  return { name: "Bronze", accent: "muted" };
+}
+
+export function getQuickPlayLevel(gameId: GameId): string {
+  return gameId === "pixelz" ? PIXELZ_LEVEL_IDS[0] : REFLEX_LEVEL_IDS[1];
+}
+
+export function getDailyChallenge(gameId: GameId, now = new Date()): DailyChallenge {
+  const index = dayOfYear(now);
+  const dateKey = toDateKey(now);
+  if (gameId === "pixelz") {
+    const levelId = PIXELZ_LEVEL_IDS[index % PIXELZ_LEVEL_IDS.length];
+    return {
+      gameId,
+      levelId,
+      label: "Daily Pixelz",
+      subtitle: `${PIXELZ_LEVELS[levelId]} · solve clean and fast`,
+      dateKey,
+    };
+  }
+
+  const levelId = REFLEX_LEVEL_IDS[index % REFLEX_LEVEL_IDS.length];
+  return {
+    gameId,
+    levelId,
+    label: "Daily Reflex",
+    subtitle: `${REFLEX_LEVELS[levelId as ReflexLevelId]} rounds · one chance to pop off`,
+    dateKey,
+  };
+}
+
+export function getDailyChallenges(now = new Date()) {
+  const tomorrow = new Date(now);
+  tomorrow.setUTCHours(24, 0, 0, 0);
+  return {
+    dateKey: toDateKey(now),
+    resetInMs: tomorrow.getTime() - now.getTime(),
+    challenges: [getDailyChallenge("pixelz", now), getDailyChallenge("reflex", now)],
+  };
+}
+
+export function getLevelProgress(gameId: GameId, levelId: string): LevelProgress | null {
+  const state = readState();
+  return state.levels[levelKey(gameId, levelId)] ?? null;
+}
+
+export function recordCompetitionResult(input: RecordCompetitionResultInput) {
+  const state = readState();
+  const key = levelKey(input.gameId, input.levelId);
+  const completedAt = input.completedAt ?? new Date();
+  const nextResult = { moves: input.moves, timeMs: input.timeMs };
+  const previous = state.levels[key];
+  const previousBest = previous
+    ? { moves: previous.bestMoves, timeMs: previous.bestTimeMs }
+    : null;
+  const isNewBest = !previousBest || compareResults(input.gameId, nextResult, previousBest) < 0;
+
+  state.levels[key] = {
+    bestMoves: isNewBest ? input.moves : previous?.bestMoves ?? input.moves,
+    bestTimeMs: isNewBest ? input.timeMs : previous?.bestTimeMs ?? input.timeMs,
+    lastMoves: input.moves,
+    lastTimeMs: input.timeMs,
+    plays: (previous?.plays ?? 0) + 1,
+    lastPlayedAt: completedAt.toISOString(),
+  };
+
+  if (input.dailyChallenge) {
+    const dateKey = toDateKey(completedAt);
+    const existing = new Set(state.dailyCompletions[dateKey] ?? []);
+    existing.add(input.gameId);
+    state.dailyCompletions[dateKey] = Array.from(existing);
+  }
+
+  writeState(state);
+
+  return {
+    isNewBest,
+    previousBest,
+    current: state.levels[key],
+  };
+}
+
+export function getCompetitionOverview(now = new Date()) {
+  const state = readState();
+  const completedDates = Object.entries(state.dailyCompletions)
+    .filter(([, games]) => games.length > 0)
+    .map(([dateKey]) => dateKey)
+    .sort();
+  const completedDateSet = new Set(completedDates);
+  let streak = 0;
+  let cursor = toDateKey(now);
+
+  if (!completedDateSet.has(cursor)) {
+    cursor = addDays(cursor, -1);
+  }
+
+  while (completedDateSet.has(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  return {
+    streak,
+    rivalsCount: state.rivals.length,
+    completedToday: state.dailyCompletions[toDateKey(now)] ?? [],
+  };
+}
+
+export function getCompetitionProfile(now = new Date()): CompetitionProfile {
+  const state = readState();
+  const currentSeason = getCurrentSeason(now);
+  const levelEntries = Object.entries(state.levels)
+    .map(([key, value]) => ({
+      gameId: gameFromLevelKey(key),
+      levelId: key.split(":").slice(1).join(":"),
+      ...value,
+    }))
+    .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt));
+  const totalPlays = levelEntries.reduce((sum, entry) => sum + entry.plays, 0);
+  const pbBoards = levelEntries.length;
+  const favoriteGame =
+    levelEntries.length === 0
+      ? null
+      : (["pixelz", "reflex"] as const).reduce<GameId>((best, gameId) => {
+          const bestCount = levelEntries.filter((entry) => entry.gameId === best).reduce((sum, entry) => sum + entry.plays, 0);
+          const nextCount = levelEntries.filter((entry) => entry.gameId === gameId).reduce((sum, entry) => sum + entry.plays, 0);
+          return nextCount > bestCount ? gameId : best;
+        }, "pixelz");
+  const overview = getCompetitionOverview(now);
+  const seasonDailyCompletions = Object.entries(state.dailyCompletions).filter(
+    ([dateKey, games]) => games.length > 0 && new Date(`${dateKey}T00:00:00.000Z`) >= currentSeason.start
+  ).length;
+
+  const achievements: ProfileAchievement[] = [
+    {
+      id: "first-benchmark",
+      label: "First Benchmark",
+      description: "Set a personal best on any board.",
+      earned: pbBoards >= 1,
+    },
+    {
+      id: "streak-starter",
+      label: "Streak Starter",
+      description: "Hold a 3-day daily streak.",
+      earned: overview.streak >= 3,
+    },
+    {
+      id: "rival-hunter",
+      label: "Rival Hunter",
+      description: "Track at least 3 rivals.",
+      earned: state.rivals.length >= 3,
+    },
+    {
+      id: "arcade-regular",
+      label: "Arcade Regular",
+      description: "Log 10 total runs.",
+      earned: totalPlays >= 10,
+    },
+    {
+      id: "dual-threat",
+      label: "Dual Threat",
+      description: "Set PBs in both Pixelz and Reflex.",
+      earned: new Set(levelEntries.map((entry) => entry.gameId)).size >= 2,
+    },
+  ];
+
+  return {
+    totalPlays,
+    pbBoards,
+    dailyCyclesCompleted: Object.values(state.dailyCompletions).filter((games) => games.length > 0).length,
+    currentStreak: overview.streak,
+    rivalsCount: state.rivals.length,
+    favoriteGame,
+    currentSeason,
+    seasonDailyCompletions,
+    recentlyPlayed: levelEntries.slice(0, 6),
+    achievements,
+  };
+}
+
+export function getRivalIds(): string[] {
+  return readState().rivals;
+}
+
+export function qualifiesForPrompt(rank: number, leaderboardSize: number): boolean {
+  if (leaderboardSize < 100) return rank <= 10;
+  return rank <= Math.ceil(leaderboardSize * 0.1);
+}
+
+export function isRival(userId: string): boolean {
+  return getRivalIds().includes(userId);
+}
+
+export function toggleRival(userId: string): string[] {
+  const state = readState();
+  const next = new Set(state.rivals);
+  if (next.has(userId)) next.delete(userId);
+  else next.add(userId);
+  state.rivals = Array.from(next);
+  writeState(state);
+  return state.rivals;
+}
+
+export function getRivalChallengeSummary(
+  gameId: GameId,
+  current: ResultSnapshot | null,
+  entries: RivalLeaderboardEntry[],
+  rivalIds: string[],
+  currentUserId?: string | null
+): RivalChallengeSummary | null {
+  const rivals = entries.filter((entry) => rivalIds.includes(entry.userId) && entry.userId !== currentUserId);
+  if (rivals.length === 0) return null;
+
+  if (!current) {
+    const target = rivals[0];
+    const name = rivalName(target);
+    return {
+      gameId,
+      rivalUserId: target.userId,
+      rivalName: name,
+      rank: target.rank,
+      status: "unplayed",
+      chipText: `${name} · ${formatResultLine(gameId, target)}`,
+      message: `${name} leads your rival pack here with ${formatResultLine(gameId, target)}. Put up your first answer.`,
+    };
+  }
+
+  const closest = rivals.reduce((best, entry) => {
+    if (!best) return entry;
+    const bestGap = getRivalGap(gameId, current, best);
+    const nextGap = getRivalGap(gameId, current, entry);
+    return nextGap.distance < bestGap.distance ? entry : best;
+  }, rivals[0]);
+  const name = rivalName(closest);
+  const gap = getRivalGap(gameId, current, closest);
+
+  if (gap.status === "tied") {
+    return {
+      gameId,
+      rivalUserId: closest.userId,
+      rivalName: name,
+      rank: closest.rank,
+      status: "tied",
+      chipText: `${name} · tied`,
+      message: `You're tied with ${name} at #${closest.rank}. One cleaner run breaks it.`,
+    };
+  }
+
+  if (gap.status === "ahead") {
+    return {
+      gameId,
+      rivalUserId: closest.userId,
+      rivalName: name,
+      rank: closest.rank,
+      status: "ahead",
+      chipText: `${name} · ${gap.text}`,
+      message: `You're ${gap.text} of ${name}. Keep the pressure on.`,
+    };
+  }
+
+  return {
+    gameId,
+    rivalUserId: closest.userId,
+    rivalName: name,
+    rank: closest.rank,
+    status: "behind",
+    chipText: `${name} · ${gap.text}`,
+    message: `You're ${gap.text} ${name} for #${closest.rank}.`,
+  };
+}
+
+export function formatBoardLabel(levelId: string, settings?: BoardSettings): string {
+  if (levelId.startsWith("reflex_")) {
+    const rounds = REFLEX_LEVELS[levelId as ReflexLevelId];
+    return rounds ? `${rounds} rounds` : "Reflex challenge";
+  }
+  if (isPredefinedPixelzLevel(levelId)) {
+    return PIXELZ_LEVELS[levelId as PixelzLevelId];
+  }
+  if (settings?.width && settings?.height && settings?.numColors) {
+    return `Custom ${settings.width}x${settings.height} · ${settings.numColors} colors`;
+  }
+  return "Custom board";
+}
+
+export function describeSessionFormat(gameId: GameId, levelId: string | null, settings?: BoardSettings): string {
+  const seriesLabel = settings?.seriesLength === 3 ? " · best of 3" : "";
+  if (gameId === "reflex") {
+    const rounds = levelId ? REFLEX_LEVELS[levelId as ReflexLevelId] : Number(settings?.rounds ?? 10);
+    return `${rounds} round duel${seriesLabel}`;
+  }
+  if (levelId && isPredefinedPixelzLevel(levelId)) {
+    return `${PIXELZ_LEVELS[levelId as PixelzLevelId]} official board${seriesLabel}`;
+  }
+  return `${formatBoardLabel(levelId ?? "pixelz_custom", settings)}${seriesLabel}`;
+}
+
+export function getSeriesMeta(
+  settings?: BoardSettings,
+  winnerUserId?: string | null
+): { length: 1 | 3; round: number; wins: Record<string, number>; targetWins: number; isBestOfThree: boolean; decided: boolean } {
+  const length = settings?.seriesLength === 3 ? 3 : 1;
+  if (length === 1) {
+    return {
+      length: 1,
+      round: 1,
+      wins: {},
+      targetWins: 1,
+      isBestOfThree: false,
+      decided: false,
+    };
+  }
+  const currentRoundRaw = Number(settings?.currentRound);
+  const currentRoundSafe = Number.isFinite(currentRoundRaw) ? currentRoundRaw : 1;
+  const round = Math.max(1, Math.trunc(currentRoundSafe));
+  const wins = { ...(settings?.seriesWins ?? {}) };
+  if (winnerUserId) {
+    wins[winnerUserId] = (wins[winnerUserId] ?? 0) + 1;
+  }
+  const targetWins = length === 3 ? 2 : 1;
+  const decided = Object.values(wins).some((value) => value >= targetWins) || round >= length;
+  return {
+    length,
+    round,
+    wins,
+    targetWins,
+    isBestOfThree: length === 3,
+    decided,
+  };
+}
+
+export function formatPerformanceDelta(
+  gameId: GameId,
+  current: ResultSnapshot,
+  target: ResultSnapshot
+): string {
+  if (gameId === "pixelz") {
+    if (current.moves !== target.moves) {
+      const diff = current.moves - target.moves;
+      return diff < 0 ? `${Math.abs(diff)} moves better` : `${diff} moves behind`;
+    }
+    const diff = current.timeMs - target.timeMs;
+    if (diff === 0) return "exactly tied";
+    return diff < 0 ? `${(Math.abs(diff) / 1000).toFixed(2)}s faster` : `${(diff / 1000).toFixed(2)}s slower`;
+  }
+
+  const diff = current.timeMs - target.timeMs;
+  if (diff === 0) return "exactly tied";
+  return diff < 0 ? `${(Math.abs(diff) / 1000).toFixed(2)}s faster` : `${(diff / 1000).toFixed(2)}s slower`;
+}
+
+export function getLeaderboardWindowLabel(window: LeaderboardView): string {
+  if (window === "day") return "Daily (UTC)";
+  if (window === "week") return "Weekly (UTC)";
+  if (window === "season") return "Season";
+  return "All Time";
+}

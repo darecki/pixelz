@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { leaderboardResponseSchema, isPixelzBoardId } from "@pixelz/shared";
+import { leaderboardResponseSchema } from "@pixelz/shared";
 import { GAME } from "@pixelz/shared";
 import { sql } from "./db.js";
 import { verifyTokenOptional } from "./auth.js";
@@ -28,11 +28,30 @@ function timeout(ms: number): Promise<never> {
   });
 }
 
+function getUtcWindowStart(window: "day" | "week", now = new Date()): Date {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  if (window === "week") {
+    start.setUTCDate(start.getUTCDate() - 6);
+  }
+  return start;
+}
+
 export async function handleLeaderboard(c: Context): Promise<Response> {
   const levelId = c.req.param("levelId");
+  const windowParam = c.req.query("window");
+  const sinceParam = c.req.query("since");
+  const window = windowParam === "day" || windowParam === "week" ? windowParam : "all";
   if (!levelId) {
     return c.json({ error: "Missing levelId" }, 400);
   }
+
+  const since = (() => {
+    if (!sinceParam) return null;
+    const parsed = new Date(sinceParam);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  })();
+  const effectiveSince = since ?? (window === "day" || window === "week" ? getUtcWindowStart(window) : null);
 
   let currentUserId: string | null = null;
 
@@ -55,35 +74,28 @@ export async function handleLeaderboard(c: Context): Promise<Response> {
   const isReflex = levelId.startsWith("reflex_");
 
   try {
-    const queryPromise = isReflex
-      ? sql`
-          select
-            s.score,
-            s.moves,
-            s.time_ms,
-            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-            u.id as user_id,
-            coalesce(s.nickname, u.nickname) as nickname
-          from public.scores s
-          join public.app_users u on u.id = s.user_id
-          where s.level_id = ${levelId}
-          order by s.score asc, s.time_ms asc
-          limit ${GAME.LEADERBOARD_TOP_N}
-        `
-      : sql`
-          select
-            s.score,
-            s.moves,
-            s.time_ms,
-            to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
-            u.id as user_id,
-            coalesce(s.nickname, u.nickname) as nickname
-          from public.scores s
-          join public.app_users u on u.id = s.user_id
-          where s.level_id = ${levelId}
-          order by s.moves asc, s.time_ms asc
-          limit ${GAME.LEADERBOARD_TOP_N}
-        `;
+    const timeFilter =
+      effectiveSince != null
+        ? sql`and s.created_at >= ${effectiveSince}`
+        : sql``;
+    const orderBy = isReflex
+      ? sql`s.score asc, s.time_ms asc`
+      : sql`s.moves asc, s.time_ms asc`;
+    const queryPromise = sql`
+      select
+        s.score,
+        s.moves,
+        s.time_ms,
+        to_char(s.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso,
+        u.id as user_id,
+        coalesce(s.nickname, u.nickname) as nickname
+      from public.scores s
+      join public.app_users u on u.id = s.user_id
+      where s.level_id = ${levelId}
+      ${timeFilter}
+      order by ${orderBy}
+      limit ${GAME.LEADERBOARD_TOP_N}
+    `;
 
     const raw = await Promise.race([
       queryPromise,

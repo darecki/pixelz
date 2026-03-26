@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchSessionInvite, joinSession, type SessionInvitePreview } from "../lib/api";
+import { describeSessionFormat, formatBoardLabel } from "../lib/competition";
 
 export default function JoinSession() {
   const { inviteCode = "" } = useParams();
@@ -46,6 +47,10 @@ export default function JoinSession() {
   if (error) return <div className="page-container"><p className="text-error">{error}</p></div>;
   if (!preview) return <div className="page-container"><p className="text-muted">Invite not found.</p></div>;
 
+  const settings = preview.settings as { width?: number; height?: number; numColors?: number; seriesLength?: number };
+  const formatLabel = describeSessionFormat(preview.game, preview.levelId, settings);
+  const stakeLabel = preview.levelId ? formatBoardLabel(preview.levelId, settings) : "Custom format";
+
   return (
     <div className="page-container page-container--narrow">
       <div className="card">
@@ -58,6 +63,12 @@ export default function JoinSession() {
             <span className="text-secondary">Host:</span> <strong>{preview.hostNickname}</strong>
           </p>
         )}
+        <p className="mb-sm">
+          <span className="text-secondary">Stake:</span> <strong>{stakeLabel}</strong>
+        </p>
+        <p className="mb-sm">
+          <span className="text-secondary">Format:</span> <strong>{formatLabel}</strong>
+        </p>
         <p className="mb-md">
           <span className="text-secondary">Status:</span> <span className="badge">{preview.status}</span>
         </p>

@@ -80,6 +80,7 @@ function isTerminalSessionStatus(status: string): boolean {
 }
 
 function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "settings" | "max_players">): CreateSessionRequest {
+  const seriesLength = parseSeriesState(session.settings).seriesLength;
   if (session.game === "reflex") {
     if (!session.level_id) throw new Error("Missing reflex level");
     return {
@@ -87,6 +88,7 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
       mode: "predefined",
       levelId: session.level_id as ReflexLevelId,
       maxPlayers: session.max_players,
+      seriesLength,
     };
   }
 
@@ -96,6 +98,7 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
       mode: "predefined",
       levelId: session.level_id as PixelzLevelId,
       maxPlayers: session.max_players,
+      seriesLength,
     };
   }
 
@@ -109,6 +112,7 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
         numColors: Number((session.settings?.numColors as number | undefined) ?? 5),
       },
       maxPlayers: session.max_players,
+      seriesLength,
     };
   }
 
@@ -122,6 +126,7 @@ function deriveSessionPayload(session: Pick<SessionRow, "game" | "level_id" | "s
       numColors: Number((session.settings?.numColors as number | undefined) ?? 5),
     },
     maxPlayers: session.max_players,
+    seriesLength,
   };
 }
 
@@ -130,6 +135,68 @@ type SessionParticipantSeed = {
   role: "host" | "guest";
 };
 
+type SeriesState = {
+  seriesLength: 1 | 3;
+  currentRound: number;
+  seriesWins: Record<string, number>;
+};
+
+function parseSeriesState(settings: Record<string, unknown> | null | undefined): SeriesState {
+  const rawLength = Number(settings?.seriesLength);
+  const seriesLength: 1 | 3 = rawLength === 3 ? 3 : 1;
+  const rawCurrentRound = Number(settings?.currentRound);
+  const currentRound = Number.isFinite(rawCurrentRound)
+    ? Math.max(1, Math.trunc(rawCurrentRound))
+    : 1;
+  const rawWins = settings?.seriesWins;
+  const seriesWins = rawWins && typeof rawWins === "object"
+    ? Object.fromEntries(
+        Object.entries(rawWins as Record<string, unknown>)
+          .filter((entry): entry is [string, number] => typeof entry[0] === "string" && typeof entry[1] === "number")
+          .map(([userId, wins]) => {
+            const safeWins = Number.isFinite(wins) ? wins : 0;
+            return [userId, Math.max(0, Math.trunc(safeWins))];
+          })
+      )
+    : {};
+  return { seriesLength, currentRound, seriesWins };
+}
+
+function nextSeriesState(source: Pick<SessionRow, "settings" | "winner_user_id">): {
+  state: SeriesState;
+  hasMoreRounds: boolean;
+  decided: boolean;
+} {
+  const previous = parseSeriesState(source.settings);
+  if (previous.seriesLength === 1) {
+    return {
+      state: {
+        seriesLength: 1,
+        currentRound: 1,
+        seriesWins: {},
+      },
+      hasMoreRounds: true,
+      decided: false,
+    };
+  }
+  const nextWins = { ...previous.seriesWins };
+  if (source.winner_user_id) {
+    nextWins[source.winner_user_id] = (nextWins[source.winner_user_id] ?? 0) + 1;
+  }
+  const targetWins = previous.seriesLength === 3 ? 2 : 1;
+  const decided = Object.values(nextWins).some((wins) => wins >= targetWins);
+  const nextRound = previous.currentRound + 1;
+  return {
+    state: {
+      seriesLength: previous.seriesLength,
+      currentRound: nextRound,
+      seriesWins: nextWins,
+    },
+    hasMoreRounds: nextRound <= previous.seriesLength,
+    decided,
+  };
+}
+
 async function createSessionRecord(
   tx: any,
   payload: CreateSessionRequest,
@@ -137,6 +204,7 @@ async function createSessionRecord(
     previousSessionId?: string | null;
     players?: SessionParticipantSeed[];
     hostUserId?: string;
+    seriesState?: SeriesState | null;
   }
 ): Promise<{ sessionId: string; inviteCode: string }> {
   const game = payload.game;
@@ -157,6 +225,18 @@ async function createSessionRecord(
   } else {
     settings = {};
   }
+
+  const seriesState = options?.seriesState ?? {
+    seriesLength: payload.seriesLength === 3 ? 3 : 1,
+    currentRound: 1,
+    seriesWins: {},
+  };
+  settings = {
+    ...settings,
+    seriesLength: seriesState.seriesLength,
+    currentRound: seriesState.currentRound,
+    seriesWins: seriesState.seriesWins,
+  };
 
   if (game === "pixelz" && payload.mode === "generated") {
     const boardId = PIXELZ_BOARD_ID_PREFIX + crypto.randomUUID();
@@ -410,6 +490,11 @@ export async function handleCreateNextSession(c: Context): Promise<Response> {
         const existing = await getNextSessionSummary(tx, sessionId);
         if (existing) return existing;
 
+        const series = nextSeriesState(source);
+        if (series.decided || !series.hasMoreRounds) {
+          return { error: "Series is already complete", status: 409 } as const;
+        }
+
         const players = await tx`
           select user_id, role
           from public.game_session_players
@@ -420,6 +505,7 @@ export async function handleCreateNextSession(c: Context): Promise<Response> {
         return createSessionRecord(tx, payload, {
           previousSessionId: sessionId,
           players: players as SessionParticipantSeed[],
+          seriesState: series.state,
         });
       });
 

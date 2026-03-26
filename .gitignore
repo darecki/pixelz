@@ -1,5 +1,5 @@
 # Architecture / local-only docs (do not commit)
-offline_game_architecture_summary.md
+markdown/
 
 # Dependencies
 node_modules/

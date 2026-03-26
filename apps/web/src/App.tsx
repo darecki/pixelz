@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import Login from "./components/Login";
 import Home from "./pages/Home";
 import Leaderboard from "./pages/Leaderboard";
+import Profile from "./pages/Profile";
 import Play from "./pages/Play";
 import JoinSession from "./pages/JoinSession";
 import SessionRoom from "./pages/SessionRoom";
@@ -27,6 +28,7 @@ function Layout({ session, children }: { session: Session | null; children: Reac
         <Link to="/" className="nav-brand">PIXELZ</Link>
         <Link to="/" className="nav-link">Home</Link>
         <Link to="/leaderboard" className="nav-link">Leaderboard</Link>
+        <Link to="/profile" className="nav-link">Profile</Link>
         <div className="nav-spacer" />
         {session ? (
           <>
@@ -87,6 +89,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/play" element={<Play />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/join/:inviteCode" element={<JoinSession />} />
             <Route path="/session/:sessionId" element={<SessionRoom />} />
           </Routes>
