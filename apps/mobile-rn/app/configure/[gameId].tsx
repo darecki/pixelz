@@ -6,6 +6,7 @@ import {
   formatBoardLabel,
   getDailyChallenge,
   PIXELZ_PRESET_CHALLENGES,
+  REFLEX_PRESET_CHALLENGES,
   toDateKey,
 } from "@pixelz/ts-game-core";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
@@ -115,6 +116,8 @@ export default function ConfigureGameScreen() {
   const [error, setError] = useState<string | null>(null);
   const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
 
+  const isPixelz = params.gameId === "pixelz";
+  const isReflex = params.gameId === "reflex";
   const dailyChallenge = useMemo(() => getDailyChallenge("pixelz", new Date(`${todayKey}T12:00:00.000Z`)), [todayKey]);
   const pixelzParams = sanitizePixelzParams(pixelzForm);
   const createDisabled = !session;
@@ -134,12 +137,11 @@ export default function ConfigureGameScreen() {
     return <CenteredMessage title="Missing game" message="Choose a game to configure before creating a run or invite." />;
   }
 
-  if (params.gameId !== "pixelz") {
+  if (!isPixelz && !isReflex) {
     return (
       <CenteredMessage
         title="Coming Soon"
-        // TODO: Extend this screen with Reflex presets once the native Reflex gameplay slice lands.
-        message="The mobile configure flow is Pixelz-first for now. Reflex session creation is next on the parity roadmap."
+        message="That mobile configure flow is not available yet."
       />
     );
   }
@@ -172,10 +174,14 @@ export default function ConfigureGameScreen() {
 
   return (
     <Screen
-      title="Configure Pixelz"
-      subtitle="Set up a solo run or package a multiplayer invite without leaving the mobile app."
+      title={isPixelz ? "Configure Pixelz" : "Configure Reflex"}
+      subtitle={
+        isPixelz
+          ? "Set up a solo run or package a multiplayer invite without leaving the mobile app."
+          : "Reflex invite creation is ready on mobile so you can set the room up here before native gameplay lands."
+      }
     >
-      {dailyChallenge ? (
+      {isPixelz && dailyChallenge ? (
         <Card>
           <SectionLabel>Daily Challenge</SectionLabel>
           <Text style={styles.cardTitle}>{dailyChallenge.label}</Text>
@@ -192,11 +198,17 @@ export default function ConfigureGameScreen() {
         <ModeToggle value={mode} onChange={setMode} />
         <StatRow
           label="Flow"
-          value={mode === "solo" ? "Launch straight into a run" : "Create a lobby and invite players"}
+          value={
+            mode === "solo"
+              ? isPixelz
+                ? "Launch straight into a run"
+                : "Native Reflex solo play lands in the gameplay phase."
+              : "Create a lobby and invite players"
+          }
         />
       </Card>
 
-      {mode === "solo" ? (
+      {mode === "solo" && isPixelz ? (
         <>
           <Card>
             <SectionLabel>Official Boards</SectionLabel>
@@ -255,7 +267,16 @@ export default function ConfigureGameScreen() {
             />
           </Card>
         </>
-      ) : (
+      ) : mode === "solo" && isReflex ? (
+        <Card>
+          <SectionLabel>Coming Soon</SectionLabel>
+          <Text style={styles.cardTitle}>Reflex gameplay is next.</Text>
+          <Text style={styles.copy}>
+            Mobile can already create Reflex rooms, but the native round experience ships in the next parity phase.
+          </Text>
+          <AppButton label="Switch To Multiplayer" onPress={() => setMode("multi")} />
+        </Card>
+      ) : isPixelz ? (
         <>
           <Card>
             <SectionLabel>Lobby</SectionLabel>
@@ -365,6 +386,74 @@ export default function ConfigureGameScreen() {
                 />
               </View>
             )}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </Card>
+        </>
+      ) : (
+        <>
+          <Card>
+            <SectionLabel>Lobby</SectionLabel>
+            <Text style={styles.copy}>
+              Create a Reflex duel or best-of-three set from mobile, then share the invite into the room.
+            </Text>
+            <AppTextField
+              label="Max Players"
+              placeholder="2"
+              value={inviteMaxPlayers}
+              keyboardType="number-pad"
+              onChangeText={setInviteMaxPlayers}
+            />
+            <View style={styles.segmentedRow}>
+              <Pressable
+                onPress={() => setSeriesLength(1)}
+                style={[styles.segmentedButton, seriesLength === 1 ? styles.segmentedButtonActive : null]}
+              >
+                <Text style={[styles.segmentedLabel, seriesLength === 1 ? styles.segmentedLabelActive : null]}>Single Match</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setSeriesLength(3)}
+                style={[styles.segmentedButton, seriesLength === 3 ? styles.segmentedButtonActive : null]}
+              >
+                <Text style={[styles.segmentedLabel, seriesLength === 3 ? styles.segmentedLabelActive : null]}>Best of 3</Text>
+              </Pressable>
+            </View>
+            <StatRow label="Rounds" value="Use the preset ladder below to pick the duel length" />
+            {!session ? (
+              <View style={styles.signInBlock}>
+                <Badge label="Sign in required" tone="warning" />
+                <AppButton label="Sign In" tone="ghost" onPress={() => router.push("/auth/sign-in")} />
+              </View>
+            ) : null}
+          </Card>
+
+          <Card>
+            <SectionLabel>Reflex Presets</SectionLabel>
+            <View style={styles.stack}>
+              {REFLEX_PRESET_CHALLENGES.map((preset) => (
+                <View key={preset.levelId} style={styles.presetRow}>
+                  <View style={styles.presetCopy}>
+                    <Text style={styles.presetTitle}>{preset.label}</Text>
+                    <Text style={styles.presetMeta}>{formatBoardLabel(preset.levelId)}</Text>
+                    <Text style={styles.copy}>{preset.description}</Text>
+                  </View>
+                  <AppButton
+                    label="Create Invite"
+                    size="sm"
+                    loading={pendingAction === `invite:${preset.levelId}`}
+                    disabled={createDisabled || pendingAction != null}
+                    onPress={() => {
+                      void handleCreateSession({
+                        game: "reflex",
+                        mode: "predefined",
+                        levelId: preset.levelId,
+                        maxPlayers: clampInviteMaxPlayers(inviteMaxPlayers),
+                        seriesLength,
+                      });
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
             {error ? <Text style={styles.error}>{error}</Text> : null}
           </Card>
         </>

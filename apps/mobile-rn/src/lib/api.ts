@@ -255,6 +255,20 @@ export async function joinSession(sessionId: string) {
   }
 }
 
+export async function createNextSession(sessionId: string): Promise<CreateSessionResponse> {
+  const apiUrl = requireApiUrl();
+  const headers = await getSessionHeaders(true);
+  const response = await fetch(`${apiUrl}/sessions/${encodeURIComponent(sessionId)}/next`, {
+    method: "POST",
+    headers,
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to create next session");
+  }
+  return response.json();
+}
+
 export async function fetchSession(sessionId: string): Promise<SessionResponse> {
   const apiUrl = requireApiUrl();
   const headers = await getSessionHeaders(false);

@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
-import { describeSessionFormat, formatBoardLabel } from "@pixelz/ts-game-core";
+import { Share, StyleSheet, Text, View } from "react-native";
+import { describeSessionFormat, formatBoardLabel, getSeriesMeta } from "@pixelz/ts-game-core";
+import { PixelzReplayViewer } from "../../src/components/PixelzReplayViewer";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
 import { AppButton, Badge, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { PixelzGame } from "../../src/features/pixelz/PixelzGame";
 import {
   beginSession,
+  createNextSession,
   fetchBoard,
   fetchSession,
   finishSession,
@@ -16,16 +18,37 @@ import {
   markSessionReady,
   type SessionResponse,
 } from "../../src/lib/api";
+import { buildSessionInviteShareMessage } from "../../src/lib/share";
 import { toBoardSettings } from "../../src/lib/session-format";
 import { useSessionRealtime } from "../../src/lib/session-realtime";
-import { colors } from "../../src/theme/tokens";
+import { colors, radii } from "../../src/theme/tokens";
 import { useSessionRoomStore } from "../../src/stores/session-room-store";
+
+function gameLabel(gameId: "pixelz" | "reflex") {
+  return gameId === "pixelz" ? "Pixelz" : "Reflex";
+}
+
+function getStatusTone(status: SessionResponse["session"]["status"]): "neutral" | "success" | "accent" | "warning" {
+  if (status === "finished") return "success";
+  if (status === "playing" || status === "ready") return "accent";
+  if (status === "cancelled" || status === "abandoned") return "warning";
+  return "neutral";
+}
+
+function getPlayerStatusTone(status: SessionResponse["players"][number]["status"]): "neutral" | "success" | "accent" | "warning" {
+  if (status === "finished") return "success";
+  if (status === "playing" || status === "ready") return "accent";
+  if (status === "abandoned") return "warning";
+  return "neutral";
+}
 
 export default function SessionScreen() {
   const params = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<"ready" | "begin" | "leave" | null>(null);
+  const pendingNavigationRef = useRef<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"ready" | "begin" | "leave" | "next" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showWinnerReplay, setShowWinnerReplay] = useState(false);
   const progressByUser = useSessionRoomStore((state) => state.progressByUser);
   const onlineIds = useSessionRoomStore((state) => state.onlineIds);
 
@@ -36,7 +59,19 @@ export default function SessionScreen() {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 1_000;
-      return data.session.status === "waiting" || data.session.status === "ready" ? 1_000 : false;
+      const currentPlayer = data.players.find((player) => player.userId === data.currentUserId) ?? null;
+      const isTerminalSession =
+        data.session.status === "finished" || data.session.status === "cancelled" || data.session.status === "abandoned";
+      if (data.session.status === "waiting" || data.session.status === "ready") {
+        return 1_000;
+      }
+      if (data.session.status === "playing" && currentPlayer?.status === "finished") {
+        return 1_000;
+      }
+      if (isTerminalSession && !data.session.nextSessionId && !data.session.partyEndedAt) {
+        return 1_000;
+      }
+      return false;
     },
   });
 
@@ -44,6 +79,10 @@ export default function SessionScreen() {
   const boardSettings = sessionData ? toBoardSettings(sessionData.session.settings) : undefined;
   const currentPlayer =
     sessionData?.players.find((player) => player.userId === sessionData.currentUserId) ?? null;
+  const isTerminalSession =
+    sessionData?.session.status === "finished" ||
+    sessionData?.session.status === "cancelled" ||
+    sessionData?.session.status === "abandoned";
 
   const { broadcast, broadcastProgress } = useSessionRealtime(
     sessionData?.session.id ?? null,
@@ -53,6 +92,24 @@ export default function SessionScreen() {
     }
   );
 
+  useEffect(() => {
+    pendingNavigationRef.current = params.sessionId;
+  }, [params.sessionId]);
+
+  function replaceWithSession(nextSessionId: string) {
+    if (!nextSessionId || nextSessionId === params.sessionId || pendingNavigationRef.current === nextSessionId) {
+      return;
+    }
+    pendingNavigationRef.current = nextSessionId;
+    router.replace({ pathname: "/session/[sessionId]", params: { sessionId: nextSessionId } });
+  }
+
+  useEffect(() => {
+    const nextSessionId = sessionData?.session.nextSessionId;
+    if (!nextSessionId) return;
+    replaceWithSession(nextSessionId);
+  }, [params.sessionId, sessionData?.session.nextSessionId]);
+
   const boardQuery = useQuery({
     queryKey: ["session-board", sessionData?.session.levelId],
     queryFn: () => fetchBoard(sessionData!.session.levelId!),
@@ -60,18 +117,28 @@ export default function SessionScreen() {
       Boolean(
         sessionData?.session.game === "pixelz" &&
           sessionData.session.levelId &&
-          sessionData.session.status === "playing"
+          (sessionData.session.status === "playing" || isTerminalSession)
       ),
   });
 
-  useEffect(() => {
-    if (sessionData?.session.status === "playing" && currentPlayer?.status === "finished") {
-      const timeout = setTimeout(() => {
-        void sessionQuery.refetch();
-      }, 1_000);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentPlayer?.status, sessionData?.session.status, sessionQuery]);
+  const sortedPlayers = useMemo(() => {
+    if (!sessionData) return [];
+    return [...sessionData.players].sort((a, b) => {
+      if (a.placement != null && b.placement != null) return a.placement - b.placement;
+      if (a.placement != null) return -1;
+      if (b.placement != null) return 1;
+      return a.userId.localeCompare(b.userId);
+    });
+  }, [sessionData]);
+
+  const seriesMeta = useMemo(
+    () => getSeriesMeta(boardSettings, isTerminalSession ? sessionData?.session.winnerId : null),
+    [boardSettings, isTerminalSession, sessionData?.session.winnerId]
+  );
+
+  const replayWinner = useMemo(() => {
+    return sortedPlayers.find((player) => player.placement === 1 && (player.moveSequence?.length ?? 0) > 0) ?? null;
+  }, [sortedPlayers]);
 
   if (!params.sessionId) {
     return <CenteredMessage title="Missing session" message="A session id is required to open the room." />;
@@ -90,8 +157,29 @@ export default function SessionScreen() {
     );
   }
 
+  const boardLabel = sessionData.session.levelId
+    ? formatBoardLabel(sessionData.session.levelId, boardSettings)
+    : "Custom format";
+  const formatLabel = describeSessionFormat(
+    sessionData.session.game,
+    sessionData.session.levelId,
+    boardSettings
+  );
+  const canCreateNextSession = Boolean(
+    isTerminalSession &&
+      currentPlayer?.role === "host" &&
+      sessionData.session.status === "finished" &&
+      !seriesMeta.decided
+  );
+  const nextRoundLabel =
+    seriesMeta.length === 3
+      ? seriesMeta.round + 1 === 3
+        ? "Play Decider"
+        : `Play Round ${seriesMeta.round + 1}`
+      : "Play Next Game";
+
   async function runSessionAction(
-    action: "ready" | "begin" | "leave",
+    action: "ready" | "begin" | "leave" | "next",
     operation: () => Promise<void>
   ) {
     setPendingAction(action);
@@ -105,12 +193,156 @@ export default function SessionScreen() {
     }
   }
 
+  async function handleShareInvite() {
+    if (!sessionData) return;
+    await Share.share({
+      message: buildSessionInviteShareMessage({
+        inviteCode: sessionData.session.inviteCode,
+        gameLabel: gameLabel(sessionData.session.game),
+        boardLabel,
+        formatLabel,
+      }),
+    });
+  }
+
+  if (isTerminalSession) {
+    const continuationMessage =
+      seriesMeta.length === 3 && seriesMeta.decided
+        ? "Series complete. Start a fresh match to run it back."
+        : sessionData.session.partyEndedAt
+          ? "The host ended the party."
+          : sessionData.session.status === "cancelled"
+            ? "The lobby was cancelled before the round could start."
+            : sessionData.session.status === "abandoned"
+              ? "The match was abandoned before the final result settled."
+              : "Waiting for host to start the next game.";
+
+    return (
+      <Screen
+        title="Session Results"
+        subtitle={`Invite ${sessionData.session.inviteCode}`}
+        right={<Badge label={sessionData.session.status} tone={getStatusTone(sessionData.session.status)} />}
+      >
+        <Card>
+          <SectionLabel>Match Complete</SectionLabel>
+          <Text style={styles.title}>{gameLabel(sessionData.session.game)}</Text>
+          <View style={styles.metricGrid}>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricLabel}>Board</Text>
+              <Text style={styles.metricValue}>{boardLabel}</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricLabel}>Format</Text>
+              <Text style={styles.metricValue}>{formatLabel}</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricLabel}>Series</Text>
+              <Text style={styles.metricValue}>{seriesMeta.length === 3 ? `Round ${seriesMeta.round} of 3` : "Single match"}</Text>
+            </View>
+            <View style={styles.metricTile}>
+              <Text style={styles.metricLabel}>Players</Text>
+              <Text style={styles.metricValue}>{`${sessionData.players.length} / ${sessionData.session.maxPlayers}`}</Text>
+            </View>
+          </View>
+          {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+        </Card>
+
+        {seriesMeta.length === 3 ? (
+          <Card>
+            <SectionLabel>Series Score</SectionLabel>
+            <View style={styles.scoreboard}>
+              {sortedPlayers.map((player) => (
+                <View key={player.userId} style={styles.scoreChip}>
+                  <Text style={styles.scoreChipName}>{player.nickname ?? player.userId.slice(0, 8)}</Text>
+                  <Text style={styles.scoreChipValue}>{seriesMeta.wins[player.userId] ?? 0} wins</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        ) : null}
+
+        <View style={styles.stack}>
+          {sortedPlayers.map((item) => (
+            <Card key={item.userId}>
+              <View style={styles.resultHeader}>
+                <View style={styles.resultHeaderCopy}>
+                  <SectionLabel>{item.role}</SectionLabel>
+                  <Text style={styles.playerName}>{item.nickname ?? item.userId.slice(0, 8)}</Text>
+                </View>
+                <View style={styles.resultBadges}>
+                  {item.placement != null ? <Badge label={`#${item.placement}`} tone={item.placement === 1 ? "success" : "accent"} /> : null}
+                  <Badge label={item.status} tone={getPlayerStatusTone(item.status)} />
+                  {item.disqualified ? <Badge label="DQ" tone="warning" /> : null}
+                </View>
+              </View>
+              {item.moves != null ? <StatRow label="Moves" value={`${item.moves}`} /> : null}
+              {item.timeMs != null ? <StatRow label="Time" value={`${(item.timeMs / 1000).toFixed(2)}s`} /> : null}
+              {item.score != null ? <StatRow label="Score" value={`${item.score}`} /> : null}
+            </Card>
+          ))}
+        </View>
+
+        <Card>
+          <SectionLabel>Continue</SectionLabel>
+          <Text style={styles.copy}>{continuationMessage}</Text>
+          <View style={styles.actions}>
+            {canCreateNextSession ? (
+              <AppButton
+                label={nextRoundLabel}
+                loading={pendingAction === "next"}
+                disabled={pendingAction != null}
+                onPress={() => {
+                  void runSessionAction("next", async () => {
+                    const created = await createNextSession(sessionData.session.id);
+                    await broadcast("next_game_created", { nextSessionId: created.sessionId });
+                    replaceWithSession(created.sessionId);
+                  });
+                }}
+              />
+            ) : null}
+            {sessionData.session.game === "pixelz" && replayWinner && boardQuery.data ? (
+              <AppButton
+                label={showWinnerReplay ? "Hide Winner Replay" : "Watch Winner Replay"}
+                tone="ghost"
+                onPress={() => setShowWinnerReplay((current) => !current)}
+              />
+            ) : null}
+            <AppButton
+              label="Leave"
+              tone="ghost"
+              loading={pendingAction === "leave"}
+              disabled={pendingAction != null}
+              onPress={() => {
+                void runSessionAction("leave", async () => {
+                  await leaveSession(sessionData.session.id);
+                  if (!sessionData.session.nextSessionId && currentPlayer?.role === "host") {
+                    await broadcast("party_closed", { sessionId: sessionData.session.id }).catch(() => {});
+                  }
+                  router.replace("/(tabs)");
+                });
+              }}
+            />
+          </View>
+        </Card>
+
+        {showWinnerReplay && replayWinner && boardQuery.data && replayWinner.moveSequence ? (
+          <PixelzReplayViewer
+            board={boardQuery.data}
+            moveSequence={replayWinner.moveSequence}
+            title={`${replayWinner.nickname ?? replayWinner.userId.slice(0, 8)}'s winning solve`}
+            subtitle={`Replaying the ${replayWinner.moveSequence.length}-move winning path.`}
+          />
+        ) : null}
+      </Screen>
+    );
+  }
+
   return (
     <Screen
       title="Session Room"
       subtitle={`Invite ${sessionData.session.inviteCode}`}
       scroll={false}
-      right={<Badge label={sessionData.session.status} tone={sessionData.session.status === "playing" ? "accent" : "neutral"} />}
+      right={<Badge label={sessionData.session.status} tone={getStatusTone(sessionData.session.status)} />}
     >
       <FlashList<SessionResponse["players"][number]>
         style={styles.list}
@@ -119,27 +351,26 @@ export default function SessionScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <Card>
-            <SectionLabel>Match</SectionLabel>
-            <StatRow label="Game" value={sessionData.session.game} />
+            <SectionLabel>{sessionData.session.status === "playing" ? "Match" : "Lobby"}</SectionLabel>
+            <StatRow label="Game" value={gameLabel(sessionData.session.game)} />
+            <StatRow label="Board" value={boardLabel} />
+            <StatRow label="Format" value={formatLabel} />
             <StatRow
-              label="Board"
-              value={
-                sessionData.session.levelId
-                  ? formatBoardLabel(sessionData.session.levelId, boardSettings)
-                  : "custom"
-              }
-            />
-            <StatRow
-              label="Format"
-              value={describeSessionFormat(
-                sessionData.session.game,
-                sessionData.session.levelId,
-                boardSettings
-              )}
+              label="Series"
+              value={seriesMeta.length === 3 ? `Round ${seriesMeta.round} of 3` : "Single match"}
             />
             <StatRow label="Players" value={`${sessionData.players.length} / ${sessionData.session.maxPlayers}`} />
             {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
             <View style={styles.actions}>
+              {sessionData.session.status !== "playing" ? (
+                <AppButton
+                  label="Share Invite"
+                  tone="ghost"
+                  onPress={() => {
+                    void handleShareInvite().catch(() => {});
+                  }}
+                />
+              ) : null}
               {sessionData.session.status === "waiting" ? (
                 <AppButton
                   label={currentPlayer?.status === "ready" ? "Ready Sent" : "Mark Ready"}
@@ -211,10 +442,22 @@ export default function SessionScreen() {
                 </Card>
               )
             ) : null}
-            {sessionData.session.status === "finished" ? (
+
+            {sessionData.session.status === "playing" && currentPlayer?.status === "finished" ? (
               <Card>
-                <SectionLabel>Results</SectionLabel>
-                <Text style={styles.copy}>The first slice stops at result display and does not create the next match yet.</Text>
+                <SectionLabel>Result Submitted</SectionLabel>
+                <Text style={styles.copy}>
+                  Your run is locked in. Stay here while the other players finish and the session resolves placements.
+                </Text>
+              </Card>
+            ) : null}
+
+            {sessionData.session.status === "playing" && sessionData.session.game === "reflex" ? (
+              <Card>
+                <SectionLabel>Reflex</SectionLabel>
+                <Text style={styles.copy}>
+                  Mobile Reflex gameplay is the next parity slice. You can still track the room here and continue this round on web.
+                </Text>
               </Card>
             ) : null}
           </View>
@@ -228,10 +471,14 @@ export default function SessionScreen() {
               <SectionLabel>{item.role}</SectionLabel>
               <Text style={styles.playerName}>{item.nickname ?? item.userId.slice(0, 8)}</Text>
               <View style={styles.statusRow}>
-                <Badge label={item.status} tone={item.status === "finished" ? "success" : "neutral"} />
+                <Badge label={item.status} tone={getPlayerStatusTone(item.status)} />
                 <Badge label={isOnline ? "online" : "offline"} tone={isOnline ? "success" : "warning"} />
+                {item.disqualified ? <Badge label="DQ" tone="warning" /> : null}
               </View>
-              <StatRow label="Progress" value={progress ? `${progress.moves} moves · ${(progress.timeMs / 1000).toFixed(1)}s` : "No live ping"} />
+              <StatRow
+                label="Progress"
+                value={progress ? `${progress.moves} moves · ${(progress.timeMs / 1000).toFixed(1)}s` : "No live ping"}
+              />
               {item.score != null ? <StatRow label="Score" value={`${item.score}`} /> : null}
             </Card>
           );
@@ -244,6 +491,9 @@ export default function SessionScreen() {
 const styles = StyleSheet.create({
   list: {
     flex: 1,
+  },
+  stack: {
+    gap: 12,
   },
   actions: {
     gap: 10,
@@ -258,6 +508,80 @@ const styles = StyleSheet.create({
   footerStack: {
     gap: 16,
     paddingTop: 16,
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+  },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  metricTile: {
+    width: "48%",
+    minWidth: 140,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  metricLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    fontWeight: "600",
+  },
+  metricValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  scoreboard: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  scoreChip: {
+    minWidth: 132,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  scoreChipName: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  scoreChipValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  resultHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  resultHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  resultBadges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "flex-end",
   },
   playerName: {
     color: colors.textPrimary,
