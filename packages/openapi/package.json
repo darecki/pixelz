@@ -1,0 +1,10 @@
+{
+  "name": "@pixelz/openapi",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "mkdir -p dist && cp openapi.yaml dist/openapi.yaml",
+    "lint": "node -e \"process.exit(0)\""
+  }
+}

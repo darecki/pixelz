@@ -84,7 +84,7 @@ describe("ReflexGame", () => {
       ],
     });
     const storage: Record<string, string> = {};
-    Object.defineProperty(global, "localStorage", {
+    Object.defineProperty(globalThis, "localStorage", {
       value: {
         getItem: (key: string) => storage[key] ?? null,
         setItem: (key: string, value: string) => {

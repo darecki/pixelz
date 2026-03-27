@@ -5,16 +5,20 @@
     "build": "pnpm -r run build",
     "dev": "pnpm -r --parallel run dev",
     "dev:api": "pnpm --filter api run dev",
+    "dev:mobile": "pnpm --filter mobile-rn run dev",
     "dev:web": "pnpm --filter web run dev",
+    "ios:mobile": "pnpm --filter mobile-rn run ios",
+    "android:mobile": "pnpm --filter mobile-rn run android",
     "lint": "pnpm -r run lint",
     "migrate": "pnpm --filter api run migrate",
     "test": "pnpm --filter api run test && pnpm --filter @pixelz/shared run test",
+    "typecheck:mobile": "pnpm --filter mobile-rn run typecheck",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@10.30.1",
   "engines": {

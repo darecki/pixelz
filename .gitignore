@@ -85,6 +85,11 @@ apps/android/.externalNativeBuild/
 *.apk
 *.aab
 
+# Expo / React Native
+apps/mobile-rn/.expo/
+apps/mobile-rn/android/
+apps/mobile-rn/ios/
+
 # Misc
 *.pid
 *.seed

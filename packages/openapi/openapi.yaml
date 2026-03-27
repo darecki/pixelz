@@ -1,0 +1,497 @@
+openapi: 3.1.0
+info:
+  title: Pixelz API
+  version: 0.1.0
+  description: Starter contract for the shared Pixelz backend used by web and mobile clients.
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: API health check
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+  /anon/register:
+    post:
+      operationId: registerAnonymous
+      responses:
+        "200":
+          description: Register a guest user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [anonymousId]
+                properties:
+                  anonymousId:
+                    type: string
+  /users/me/merge-anonymous:
+    post:
+      operationId: mergeAnonymous
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [anonymousId]
+              properties:
+                anonymousId:
+                  type: string
+      responses:
+        "200":
+          description: Guest progress merged into the signed-in account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+  /leaderboards/{levelId}:
+    get:
+      operationId: getLeaderboard
+      parameters:
+        - in: path
+          name: levelId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [all, day, week]
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Leaderboard for a given level
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+  /boards:
+    post:
+      operationId: createBoard
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                width:
+                  type: integer
+                height:
+                  type: integer
+                numColors:
+                  type: integer
+      responses:
+        "200":
+          description: Create a new Pixelz board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+  /boards/{boardId}:
+    get:
+      operationId: getBoard
+      parameters:
+        - in: path
+          name: boardId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fetch a board payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+  /sync:
+    post:
+      operationId: postSync
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "200":
+          description: Sync accepted/rejected event counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResponse"
+  /sessions/invite/{inviteCode}:
+    get:
+      operationId: getSessionInvite
+      parameters:
+        - in: path
+          name: inviteCode
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session invite preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionInvitePreview"
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionDetail"
+  /sessions/{id}/join:
+    post:
+      operationId: joinSession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Joined session
+  /sessions/{id}/ready:
+    post:
+      operationId: readySession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Player marked ready
+  /sessions/{id}/begin:
+    post:
+      operationId: beginSession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session started
+  /sessions/{id}/finish:
+    post:
+      operationId: finishSession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishSessionRequest"
+      responses:
+        "200":
+          description: Session result accepted
+  /sessions/{id}/leave:
+    post:
+      operationId: leaveSession
+      security:
+        - bearerAuth: []
+        - anonymousIdAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Player left session
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    anonymousIdAuth:
+      type: apiKey
+      in: header
+      name: X-Anonymous-Id
+  schemas:
+    Board:
+      type: object
+      required: [boardId, width, height, numColors, seed]
+      properties:
+        boardId:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        numColors:
+          type: integer
+        seed:
+          type: string
+    LeaderboardEntry:
+      type: object
+      required: [rank, userId, nickname, score, moves, timeMs, createdAt]
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: string
+        nickname:
+          type:
+            - string
+            - "null"
+        score:
+          type: integer
+        moves:
+          type: integer
+        timeMs:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    LeaderboardResponse:
+      type: object
+      required: [levelId, entries]
+      properties:
+        levelId:
+          type: string
+        currentUserId:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+    SyncEvent:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        clientTimestamp:
+          type: integer
+    SyncRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncEvent"
+    SyncResponse:
+      type: object
+      required: [acceptedCount, rejectedCount]
+      properties:
+        acceptedCount:
+          type: integer
+        rejectedCount:
+          type: integer
+        rejectedIndices:
+          type: array
+          items:
+            type: integer
+        rejectedReasons:
+          type: object
+          additionalProperties:
+            type: string
+    SessionInvitePreview:
+      type: object
+      required: [sessionId, game, levelId, settings, status, maxPlayers, hostNickname]
+      properties:
+        sessionId:
+          type: string
+        game:
+          type: string
+          enum: [pixelz, reflex]
+        levelId:
+          type:
+            - string
+            - "null"
+        settings:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [waiting, ready, playing, finished, cancelled, abandoned]
+        maxPlayers:
+          type: integer
+        hostNickname:
+          type:
+            - string
+            - "null"
+    SessionPlayer:
+      type: object
+      required:
+        [userId, role, status, score, moves, timeMs, moveSequence, finishedAt, nickname, placement, disqualified]
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [host, guest]
+        status:
+          type: string
+          enum: [joined, ready, playing, finished, abandoned]
+        score:
+          type:
+            - integer
+            - "null"
+        moves:
+          type:
+            - integer
+            - "null"
+        timeMs:
+          type:
+            - integer
+            - "null"
+        moveSequence:
+          type:
+            - array
+            - "null"
+          items:
+            type: integer
+        finishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        nickname:
+          type:
+            - string
+            - "null"
+        placement:
+          type:
+            - integer
+            - "null"
+        disqualified:
+          type: boolean
+    SessionDetail:
+      type: object
+      required: [currentUserId, session, players]
+      properties:
+        currentUserId:
+          type:
+            - string
+            - "null"
+        session:
+          type: object
+          required:
+            [id, game, inviteCode, levelId, seed, settings, status, maxPlayers, startsAt, finishedAt, winnerId, nextSessionId, partyEndedAt]
+          properties:
+            id:
+              type: string
+            game:
+              type: string
+              enum: [pixelz, reflex]
+            inviteCode:
+              type: string
+            levelId:
+              type:
+                - string
+                - "null"
+            seed:
+              type: string
+            settings:
+              type: object
+              additionalProperties: true
+            status:
+              type: string
+              enum: [waiting, ready, playing, finished, cancelled, abandoned]
+            maxPlayers:
+              type: integer
+            startsAt:
+              type:
+                - string
+                - "null"
+            finishedAt:
+              type:
+                - string
+                - "null"
+            winnerId:
+              type:
+                - string
+                - "null"
+            nextSessionId:
+              type:
+                - string
+                - "null"
+            partyEndedAt:
+              type:
+                - string
+                - "null"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionPlayer"
+    FinishSessionRequest:
+      type: object
+      required: [moves, timeMs]
+      properties:
+        moves:
+          type: integer
+        timeMs:
+          type: integer
+        moveSequence:
+          type: array
+          items:
+            type: integer
+        disqualified:
+          type: boolean
