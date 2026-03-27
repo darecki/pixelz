@@ -4,7 +4,6 @@ import { appendEvent } from "../../lib/eventLog";
 import { performSync } from "../../lib/sync";
 import { fetchBoard, fetchLeaderboard, STORAGE_KEYS } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
-import GameOverNickname from "../../components/GameOverNickname";
 import PixelzReplayViewer from "../../components/PixelzReplayViewer";
 import SignInPrompt from "../../components/SignInPrompt";
 import { computePixelzScore } from "@pixelz/shared";
@@ -365,7 +364,6 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
           {rivalInsight && <p className="text-muted text-sm">{rivalInsight.message}</p>}
         </div>
         {saving && <p className="loading-text text-sm">Saving…</p>}
-        {!showSignInPrompt && <GameOverNickname disabled={saving} hideIfNoAuth={true} />}
         <div className="game-result-actions">
           <button
             type="button"
@@ -408,7 +406,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
           </button>
           {board && moveSequence.length > 0 && (
             <button type="button" onClick={() => setShowReplay((current) => !current)} className="btn" disabled={saving}>
-              {showReplay ? "Hide replay" : "Watch replay"}
+              {showReplay ? "Hide replay" : "Watch solve replay"}
             </button>
           )}
           <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={saving}>
@@ -420,7 +418,7 @@ export default function PixelzGame({ levelId, sessionProps }: { levelId: string;
             board={board}
             moveSequence={moveSequence}
             title="Your solve replay"
-            subtitle={`Watch all ${moveSequence.length} moves back.`}
+            subtitle={`This replays the ${moveSequence.length}-move solve you just made on this board.`}
           />
         )}
       </div>
