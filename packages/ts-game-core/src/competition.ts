@@ -58,11 +58,53 @@ export type DailyChallengeSet = {
   challenges: DailyChallenge[];
 };
 
+export type PresetChallenge<LevelId extends string = string> = {
+  levelId: LevelId;
+  label: string;
+  description: string;
+};
+
 export type CompetitionOverview = {
   streak: number;
   rivalsCount: number;
   completedToday: GameId[];
 };
+
+export const PIXELZ_PRESET_CHALLENGES = [
+  {
+    levelId: PIXELZ_LEVEL_IDS[0],
+    label: "Warm-Up",
+    description: "Compact official board for fast, low-commitment runs.",
+  },
+  {
+    levelId: PIXELZ_LEVEL_IDS[4],
+    label: "Mainline",
+    description: "Core official board when you want the standard Pixelz lane.",
+  },
+  {
+    levelId: PIXELZ_LEVEL_IDS[9],
+    label: "Alternate",
+    description: "Another official layout for mixing up your route planning.",
+  },
+] as const satisfies readonly PresetChallenge<PixelzLevelId>[];
+
+export const REFLEX_PRESET_CHALLENGES = [
+  {
+    levelId: REFLEX_LEVEL_IDS[0],
+    label: "Sprint",
+    description: "Short race to warm up your reflexes.",
+  },
+  {
+    levelId: REFLEX_LEVEL_IDS[1],
+    label: "Ranked Run",
+    description: "The standard duel format for fast rematches.",
+  },
+  {
+    levelId: REFLEX_LEVEL_IDS[3],
+    label: "Gauntlet",
+    description: "Longer set for consistency under pressure.",
+  },
+] as const satisfies readonly PresetChallenge<ReflexLevelId>[];
 
 function addDays(dateKey: string, delta: number): string {
   const date = new Date(`${dateKey}T12:00:00Z`);

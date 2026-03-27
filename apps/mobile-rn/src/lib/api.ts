@@ -1,8 +1,10 @@
 import type { SyncEvent } from "@pixelz/ts-contracts";
 import {
+  createSessionSchema,
   leaderboardResponseSchema,
   syncRequestSchema,
   syncResponseSchema,
+  type CreateSessionRequest,
   type LeaderboardResponse,
   type SyncResponse,
 } from "@pixelz/ts-contracts";
@@ -28,6 +30,7 @@ export type SessionFinishPayload = {
   moveSequence?: number[];
   disqualified?: boolean;
 };
+export type CreateSessionResponse = { sessionId: string; inviteCode: string };
 
 export type SessionInvitePreview = {
   sessionId: string;
@@ -98,8 +101,8 @@ export async function registerAnonymous(): Promise<{ anonymousId: string }> {
   const apiUrl = requireApiUrl();
   const response = await fetch(`${apiUrl}/anon/register`, { method: "POST" });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to register guest");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to register guest");
   }
 
   const payload = (await response.json()) as { anonymousId?: string };
@@ -145,8 +148,8 @@ export async function mergeAnonymousProgress(accessToken: string) {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to merge guest progress");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to merge guest progress");
   }
 
   await removePreference(PREFERENCE_KEYS.anonymousId);
@@ -157,8 +160,27 @@ export async function fetchBoard(boardId: string): Promise<BoardParams> {
   const apiUrl = requireApiUrl();
   const response = await fetch(`${apiUrl}/boards/${encodeURIComponent(boardId)}`);
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to load board");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to load board");
+  }
+  return response.json();
+}
+
+export async function createBoard(params: {
+  width?: number;
+  height?: number;
+  numColors?: number;
+}): Promise<BoardParams> {
+  const apiUrl = requireApiUrl();
+  // Board creation is currently public on the API, so this request intentionally has no auth header.
+  const response = await fetch(`${apiUrl}/boards`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to create board");
   }
   return response.json();
 }
@@ -189,8 +211,33 @@ export async function fetchSessionInvite(inviteCode: string): Promise<SessionInv
   const apiUrl = requireApiUrl();
   const response = await fetch(`${apiUrl}/sessions/invite/${encodeURIComponent(inviteCode)}`);
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to load invite");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to load invite");
+  }
+  return response.json();
+}
+
+export async function createSession(payload: CreateSessionRequest): Promise<CreateSessionResponse> {
+  const apiUrl = requireApiUrl();
+  const headers = await getSessionHeaders(true);
+  const body = createSessionSchema.parse(payload);
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/sessions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw wrapFetchError(error, "Create invite failed.");
+  }
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to create session");
   }
   return response.json();
 }
@@ -203,8 +250,8 @@ export async function joinSession(sessionId: string) {
     headers,
   });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to join session");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to join session");
   }
 }
 
@@ -213,8 +260,8 @@ export async function fetchSession(sessionId: string): Promise<SessionResponse> 
   const headers = await getSessionHeaders(false);
   const response = await fetch(`${apiUrl}/sessions/${encodeURIComponent(sessionId)}`, { headers });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((payload as { error?: string }).error ?? "Failed to load session");
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((errorBody as { error?: string }).error ?? "Failed to load session");
   }
   return response.json();
 }
@@ -227,10 +274,10 @@ async function postSessionAction(sessionId: string, action: "ready" | "begin" | 
     headers,
   });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
     const message =
-      (payload as { error?: string; details?: string }).error ??
-      (payload as { details?: string }).details ??
+      (errorBody as { error?: string; details?: string }).error ??
+      (errorBody as { details?: string }).details ??
       `Failed to ${action} session`;
     throw new Error(message);
   }

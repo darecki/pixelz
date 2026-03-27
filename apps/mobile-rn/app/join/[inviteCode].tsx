@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text } from "react-native";
+import { describeSessionFormat, formatBoardLabel } from "@pixelz/ts-game-core";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
 import { AppButton, Badge, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { fetchSessionInvite, joinSession } from "../../src/lib/api";
+import { toBoardSettings } from "../../src/lib/session-format";
 import { colors } from "../../src/theme/tokens";
 
 export default function JoinSessionScreen() {
@@ -36,6 +38,7 @@ export default function JoinSessionScreen() {
   }
 
   const preview = inviteQuery.data;
+  const boardSettings = toBoardSettings(preview.settings);
 
   async function handleJoin() {
     setJoining(true);
@@ -56,7 +59,11 @@ export default function JoinSessionScreen() {
         <SectionLabel>Preview</SectionLabel>
         <Badge label={preview.status} tone={preview.status === "waiting" ? "success" : "warning"} />
         <StatRow label="Game" value={preview.game} />
-        <StatRow label="Board" value={preview.levelId ?? "custom"} />
+        <StatRow label="Board" value={preview.levelId ? formatBoardLabel(preview.levelId, boardSettings) : "custom"} />
+        <StatRow
+          label="Format"
+          value={describeSessionFormat(preview.game, preview.levelId, boardSettings)}
+        />
         <StatRow label="Max players" value={`${preview.maxPlayers}`} />
         <StatRow label="Host" value={preview.hostNickname ?? "Anonymous host"} />
         {error ? <Text style={styles.error}>{error}</Text> : null}

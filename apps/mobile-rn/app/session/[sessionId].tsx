@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
+import { describeSessionFormat, formatBoardLabel } from "@pixelz/ts-game-core";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
 import { AppButton, Badge, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { PixelzGame } from "../../src/features/pixelz/PixelzGame";
@@ -15,6 +16,7 @@ import {
   markSessionReady,
   type SessionResponse,
 } from "../../src/lib/api";
+import { toBoardSettings } from "../../src/lib/session-format";
 import { useSessionRealtime } from "../../src/lib/session-realtime";
 import { colors } from "../../src/theme/tokens";
 import { useSessionRoomStore } from "../../src/stores/session-room-store";
@@ -39,6 +41,7 @@ export default function SessionScreen() {
   });
 
   const sessionData = sessionQuery.data;
+  const boardSettings = sessionData ? toBoardSettings(sessionData.session.settings) : undefined;
   const currentPlayer =
     sessionData?.players.find((player) => player.userId === sessionData.currentUserId) ?? null;
 
@@ -118,7 +121,22 @@ export default function SessionScreen() {
           <Card>
             <SectionLabel>Match</SectionLabel>
             <StatRow label="Game" value={sessionData.session.game} />
-            <StatRow label="Board" value={sessionData.session.levelId ?? "custom"} />
+            <StatRow
+              label="Board"
+              value={
+                sessionData.session.levelId
+                  ? formatBoardLabel(sessionData.session.levelId, boardSettings)
+                  : "custom"
+              }
+            />
+            <StatRow
+              label="Format"
+              value={describeSessionFormat(
+                sessionData.session.game,
+                sessionData.session.levelId,
+                boardSettings
+              )}
+            />
             <StatRow label="Players" value={`${sessionData.players.length} / ${sessionData.session.maxPlayers}`} />
             {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
             <View style={styles.actions}>

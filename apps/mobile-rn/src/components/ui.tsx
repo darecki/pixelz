@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 import {
   ActivityIndicator,
+  type KeyboardTypeOptions,
   Pressable,
   StyleSheet,
   Text,
@@ -112,12 +113,14 @@ export function AppTextField({
   placeholder,
   value,
   secureTextEntry,
+  keyboardType,
   onChangeText,
 }: {
   label: string;
   placeholder: string;
   value: string;
   secureTextEntry?: boolean;
+  keyboardType?: KeyboardTypeOptions;
   onChangeText: (value: string) => void;
 }) {
   return (
@@ -130,6 +133,7 @@ export function AppTextField({
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
         onChangeText={onChangeText}
         style={styles.input}
       />

@@ -160,6 +160,11 @@ export default function HomeScreen() {
           Open any pixelz:// or app link into /join/:inviteCode to jump straight into the mobile session preview.
         </Text>
         <AppButton
+          label="Create Match"
+          tone="secondary"
+          onPress={() => router.push({ pathname: "/configure/[gameId]", params: { gameId: "pixelz" } })}
+        />
+        <AppButton
           label="Open Sample Invite Route"
           tone="ghost"
           onPress={() => router.push({ pathname: "/join/[inviteCode]", params: { inviteCode: "demo1234" } })}

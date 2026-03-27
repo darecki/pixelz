@@ -9,12 +9,12 @@ import {
   getDailyChallenges,
   getLeaderboardWindowLabel,
   getLeaderboardWindowStart,
+  PIXELZ_PRESET_CHALLENGES,
+  REFLEX_PRESET_CHALLENGES,
   getQuickPlayLevel,
   getSeasonWindowStart,
   getSeasonTier,
   getSeriesMeta,
-  PIXELZ_LEVEL_IDS,
-  REFLEX_LEVEL_IDS,
   toDateKey,
   type BoardSettings,
   type DailyChallenge,
@@ -36,6 +36,8 @@ export {
   getDailyChallenges,
   getLeaderboardWindowLabel,
   getLeaderboardWindowStart,
+  PIXELZ_PRESET_CHALLENGES,
+  REFLEX_PRESET_CHALLENGES,
   getQuickPlayLevel,
   getSeasonWindowStart,
   getSeasonTier,
@@ -134,42 +136,6 @@ function createDefaultState(): CompetitionState {
     rivals: [],
   };
 }
-
-export const PIXELZ_PRESET_CHALLENGES = [
-  {
-    levelId: PIXELZ_LEVEL_IDS[0],
-    label: "Warm-Up",
-    description: "Compact official board for fast, low-commitment runs.",
-  },
-  {
-    levelId: PIXELZ_LEVEL_IDS[4],
-    label: "Mainline",
-    description: "Core official board when you want the standard Pixelz lane.",
-  },
-  {
-    levelId: PIXELZ_LEVEL_IDS[9],
-    label: "Alternate",
-    description: "Another official layout for mixing up your route planning.",
-  },
-] as const;
-
-export const REFLEX_PRESET_CHALLENGES = [
-  {
-    levelId: REFLEX_LEVEL_IDS[0],
-    label: "Sprint",
-    description: "Short race to warm up your reflexes.",
-  },
-  {
-    levelId: REFLEX_LEVEL_IDS[1],
-    label: "Ranked Run",
-    description: "The standard duel format for fast rematches.",
-  },
-  {
-    levelId: REFLEX_LEVEL_IDS[3],
-    label: "Gauntlet",
-    description: "Longer set for consistency under pressure.",
-  },
-] as const;
 
 function gameFromLevelKey(key: string): GameId {
   return key.startsWith("pixelz:") ? "pixelz" : "reflex";
