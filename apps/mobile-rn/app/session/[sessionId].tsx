@@ -8,6 +8,7 @@ import { PixelzReplayViewer } from "../../src/components/PixelzReplayViewer";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
 import { AppButton, Badge, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { PixelzGame } from "../../src/features/pixelz/PixelzGame";
+import { ReflexGame } from "../../src/features/reflex/ReflexGame";
 import {
   beginSession,
   createNextSession,
@@ -443,6 +444,28 @@ export default function SessionScreen() {
               )
             ) : null}
 
+            {sessionData.session.status === "playing" &&
+            sessionData.session.game === "reflex" &&
+            currentPlayer?.status !== "finished" ? (
+              <ReflexGame
+                levelId={sessionData.session.levelId ?? "reflex_level_1"}
+                seed={sessionData.session.seed}
+                mode="session"
+                onProgress={(progress) => {
+                  void broadcastProgress(progress);
+                }}
+                onComplete={async (result) => {
+                  await finishSession(sessionData.session.id, {
+                    moves: result.moves,
+                    timeMs: result.timeMs,
+                    disqualified: result.disqualified,
+                  });
+                  await broadcast("player_finished", { sessionId: sessionData.session.id });
+                  await sessionQuery.refetch();
+                }}
+              />
+            ) : null}
+
             {sessionData.session.status === "playing" && currentPlayer?.status === "finished" ? (
               <Card>
                 <SectionLabel>Result Submitted</SectionLabel>
@@ -452,14 +475,6 @@ export default function SessionScreen() {
               </Card>
             ) : null}
 
-            {sessionData.session.status === "playing" && sessionData.session.game === "reflex" ? (
-              <Card>
-                <SectionLabel>Reflex</SectionLabel>
-                <Text style={styles.copy}>
-                  Mobile Reflex gameplay is the next parity slice. You can still track the room here and continue this round on web.
-                </Text>
-              </Card>
-            ) : null}
           </View>
         }
         ItemSeparatorComponent={() => <View style={styles.listSeparator} />}

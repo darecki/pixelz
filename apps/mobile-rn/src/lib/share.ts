@@ -11,6 +11,16 @@ export function buildPlayShareMessage(levelId: string, result: { moves: number; 
   return `I just cleared ${boardLabel} in ${result.moves} moves and ${(result.timeMs / 1000).toFixed(2)}s on Pixelz. Try it here: ${deepLink}`;
 }
 
+export function buildReflexChallengeShareMessage(levelId: string, timeMs: number, label = "Friend PB"): string {
+  const params = new URLSearchParams({
+    ghost: "shared",
+    ghostTimeMs: `${Math.round(timeMs)}`,
+    ghostLabel: label,
+  });
+  const deepLink = `${buildDeepLink(`/play/${encodeURIComponent(levelId)}`)}?${params.toString()}`;
+  return `I just finished ${formatBoardLabel(levelId)} in ${(timeMs / 1000).toFixed(2)}s on Pixelz Reflex. Chase it here: ${deepLink}`;
+}
+
 export function buildSessionInviteShareMessage(input: {
   inviteCode: string;
   gameLabel: string;

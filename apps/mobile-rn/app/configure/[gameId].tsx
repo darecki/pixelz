@@ -269,12 +269,24 @@ export default function ConfigureGameScreen() {
         </>
       ) : mode === "solo" && isReflex ? (
         <Card>
-          <SectionLabel>Coming Soon</SectionLabel>
-          <Text style={styles.cardTitle}>Reflex gameplay is next.</Text>
-          <Text style={styles.copy}>
-            Mobile can already create Reflex rooms, but the native round experience ships in the next parity phase.
-          </Text>
-          <AppButton label="Switch To Multiplayer" onPress={() => setMode("multi")} />
+          <SectionLabel>Reflex Levels</SectionLabel>
+          <Text style={styles.copy}>Pick a duel length and jump straight into the native mobile Reflex run.</Text>
+          <View style={styles.stack}>
+            {REFLEX_PRESET_CHALLENGES.map((preset) => (
+              <View key={preset.levelId} style={styles.presetRow}>
+                <View style={styles.presetCopy}>
+                  <Text style={styles.presetTitle}>{preset.label}</Text>
+                  <Text style={styles.presetMeta}>{formatBoardLabel(preset.levelId)}</Text>
+                  <Text style={styles.copy}>{preset.description}</Text>
+                </View>
+                <AppButton
+                  label="Play"
+                  size="sm"
+                  onPress={() => router.push({ pathname: "/play/[levelId]", params: { levelId: preset.levelId } })}
+                />
+              </View>
+            ))}
+          </View>
         </Card>
       ) : isPixelz ? (
         <>

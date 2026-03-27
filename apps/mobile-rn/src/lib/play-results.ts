@@ -11,6 +11,12 @@ export type ProjectedLeaderboardInsight = {
   } | null;
 };
 
+type ProjectionCandidate = {
+  rank: number;
+  moves: number;
+  timeMs: number;
+};
+
 export function isNewPixelzBest(
   previousBest: ResultSnapshot | null,
   currentBest: LevelProgressSnapshot | null
@@ -23,9 +29,18 @@ export function isNewPixelzBest(
   return currentBest.bestTimeMs < previousBest.timeMs;
 }
 
-export function getProjectedLeaderboardInsight(
-  result: ResultSnapshot,
-  leaderboard: LeaderboardResponse | null
+export function isNewReflexBest(
+  previousBest: ResultSnapshot | null,
+  currentBest: LevelProgressSnapshot | null
+): boolean {
+  if (!currentBest) return false;
+  if (!previousBest) return true;
+  return currentBest.bestTimeMs < previousBest.timeMs;
+}
+
+function projectAgainstLeaderboard(
+  leaderboard: LeaderboardResponse | null,
+  beatsOrTiesEntry: (entry: ProjectionCandidate) => boolean
 ): ProjectedLeaderboardInsight {
   if (!leaderboard) {
     return {
@@ -34,10 +49,7 @@ export function getProjectedLeaderboardInsight(
     };
   }
 
-  const projectedIndex = leaderboard.entries.findIndex((entry) => (
-    result.moves < entry.moves ||
-    (result.moves === entry.moves && result.timeMs <= entry.timeMs)
-  ));
+  const projectedIndex = leaderboard.entries.findIndex((entry) => beatsOrTiesEntry(entry));
   const projectedRank =
     projectedIndex === -1
       ? (leaderboard.entries.at(-1)?.rank ?? 0) + 1
@@ -59,6 +71,24 @@ export function getProjectedLeaderboardInsight(
         }
       : null,
   };
+}
+
+export function getProjectedLeaderboardInsight(
+  result: ResultSnapshot,
+  leaderboard: LeaderboardResponse | null
+): ProjectedLeaderboardInsight {
+  return projectAgainstLeaderboard(
+    leaderboard,
+    (entry) => result.moves < entry.moves || (result.moves === entry.moves && result.timeMs <= entry.timeMs)
+  );
+}
+
+export function getProjectedReflexLeaderboardInsight(
+  timeMs: number,
+  leaderboard: LeaderboardResponse | null
+): ProjectedLeaderboardInsight {
+  // Reflex leaderboards are sorted best-first, so lower times appear earlier in the API payload.
+  return projectAgainstLeaderboard(leaderboard, (entry) => timeMs <= entry.timeMs);
 }
 
 export function qualifiesForLeaderboardPrompt(rank: number | null, leaderboardSize: number): boolean {
