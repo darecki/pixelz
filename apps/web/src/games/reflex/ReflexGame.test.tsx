@@ -144,6 +144,18 @@ describe("ReflexGame", () => {
     expect(await screen.findByText("Friend PB · 4.20s")).toBeInTheDocument();
   });
 
+  it("shows a non-loading empty state when no leaderboard ghost is available", async () => {
+    fetchLeaderboardMock.mockResolvedValueOnce({
+      currentUserId: null,
+      levelId: "reflex_level_0",
+      entries: [],
+    });
+
+    renderReflex();
+
+    expect(await screen.findByText("No target available")).toBeInTheDocument();
+  });
+
   it("marks the current ghost line as behind when the cumulative split exceeds the target split", () => {
     const comparison = buildGhostComparison({ label: "Leaderboard ghost", timeMs: 3100 }, 1, 5, 1000);
 

@@ -79,8 +79,18 @@ export function isPredefinedPixelzLevel(levelId: string): levelId is PixelzLevel
   return (PIXELZ_LEVEL_IDS as readonly string[]).includes(levelId);
 }
 
+export function isUtcDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return toUtcDateKey(normalized) === value;
+}
+
 export function isDailyPixelzBoardId(levelId: string): boolean {
-  return /^pixelz_daily_\d{4}-\d{2}-\d{2}$/.test(levelId);
+  if (!levelId.startsWith(DAILY_PIXELZ_BOARD_ID_PREFIX)) {
+    return false;
+  }
+  return isUtcDateKey(levelId.slice(DAILY_PIXELZ_BOARD_ID_PREFIX.length));
 }
 
 export function toUtcDateKey(date: Date): string {
@@ -98,10 +108,22 @@ export function getDailyPixelzBoardId(date = new Date()): string {
   return `${DAILY_PIXELZ_BOARD_ID_PREFIX}${toUtcDateKey(date)}`;
 }
 
+export function isReleasedDailyPixelzBoardId(levelId: string, now = new Date()): boolean {
+  const dateKey = parseDailyPixelzBoardDateKey(levelId);
+  if (!dateKey) return false;
+  return dateKey <= toUtcDateKey(now);
+}
+
 export function getDailyPixelzBoardSpec(input: Date | string = new Date()) {
   const dateKey = input instanceof Date
     ? toUtcDateKey(input)
-    : parseDailyPixelzBoardDateKey(input) ?? input;
+    : isUtcDateKey(input)
+      ? input
+      : parseDailyPixelzBoardDateKey(input);
+
+  if (!dateKey) {
+    throw new Error(`Invalid daily Pixelz board input: ${input}`);
+  }
 
   return {
     boardId: `${DAILY_PIXELZ_BOARD_ID_PREFIX}${dateKey}`,

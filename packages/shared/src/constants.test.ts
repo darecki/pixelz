@@ -8,9 +8,11 @@ import {
   computePixelzScore,
   getDailyPixelzBoardId,
   getDailyPixelzBoardSpec,
+  isReleasedDailyPixelzBoardId,
   isPixelzBoardId,
   isDailyPixelzBoardId,
   isPredefinedPixelzLevel,
+  isUtcDateKey,
   parseDailyPixelzBoardDateKey,
   PIXELZ_LEVEL_IDS,
   REFLEX_LEVEL_IDS,
@@ -81,6 +83,9 @@ describe("daily Pixelz boards", () => {
     expect(isDailyPixelzBoardId("pixelz_daily_2026-03-26")).toBe(true);
     expect(parseDailyPixelzBoardDateKey("pixelz_daily_2026-03-26")).toBe("2026-03-26");
     expect(isDailyPixelzBoardId("pixelz_daily_bad")).toBe(false);
+    expect(isDailyPixelzBoardId("pixelz_daily_9999-99-99")).toBe(false);
+    expect(isUtcDateKey("2026-03-26")).toBe(true);
+    expect(isUtcDateKey("9999-99-99")).toBe(false);
   });
 
   it("derives a deterministic daily board spec", () => {
@@ -92,6 +97,17 @@ describe("daily Pixelz boards", () => {
       numColors: DAILY_PIXELZ_BOARD_NUM_COLORS,
       seed: "pixelz-daily:2026-03-26",
     });
+  });
+
+  it("rejects malformed daily board spec inputs instead of deriving nested prefixes", () => {
+    expect(() => getDailyPixelzBoardSpec("pixelz_daily_bad")).toThrow(/Invalid daily Pixelz board input/);
+  });
+
+  it("treats only today and earlier daily boards as released", () => {
+    const now = new Date("2026-03-26T12:00:00Z");
+    expect(isReleasedDailyPixelzBoardId("pixelz_daily_2026-03-26", now)).toBe(true);
+    expect(isReleasedDailyPixelzBoardId("pixelz_daily_2026-03-25", now)).toBe(true);
+    expect(isReleasedDailyPixelzBoardId("pixelz_daily_2026-03-27", now)).toBe(false);
   });
 });
 

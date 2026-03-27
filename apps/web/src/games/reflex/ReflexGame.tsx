@@ -161,9 +161,13 @@ function resolveImmediateGhostTarget(ghostRequest: ReflexGhostRequest, personalB
   return null;
 }
 
-function GhostTimeline({ comparison }: { comparison: GhostComparison | null }) {
+function GhostTimeline({ comparison, isLoading }: { comparison: GhostComparison | null; isLoading: boolean }) {
   if (!comparison) {
-    return <div className="ghost-timeline ghost-timeline--empty">Loading target pace</div>;
+    return (
+      <div className="ghost-timeline ghost-timeline--empty">
+        {isLoading ? "Loading target pace" : "No target pace available"}
+      </div>
+    );
   }
 
   const totalMs = Math.max(comparison.baselineMs, 1);
@@ -214,6 +218,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   const [lastResultWasBest, setLastResultWasBest] = useState<boolean | null>(null);
   const [rivalInsight, setRivalInsight] = useState<RivalChallengeSummary | null>(null);
   const [ghostTarget, setGhostTarget] = useState<GhostTarget | null>(null);
+  const [isGhostTargetLoading, setIsGhostTargetLoading] = useState(true);
 
   const reactionStartRef = useRef<number>(0);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -265,7 +270,9 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
     setLastResultWasBest(null);
     setLastSplitMs(null);
     setRivalInsight(null);
-    setGhostTarget(resolveImmediateGhostTarget(ghostRequest, nextLevelProgress?.bestTimeMs ?? null));
+    const immediateGhostTarget = resolveImmediateGhostTarget(ghostRequest, nextLevelProgress?.bestTimeMs ?? null);
+    setGhostTarget(immediateGhostTarget);
+    setIsGhostTargetLoading(immediateGhostTarget == null);
     return () => {
       if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
       if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
@@ -275,17 +282,20 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   useEffect(() => {
     let cancelled = false;
     if (ghostRequestMode === "shared") {
+      setIsGhostTargetLoading(false);
       setGhostTarget({ label: ghostRequestLabel, timeMs: ghostRequestTimeMs });
       return () => {
         cancelled = true;
       };
     }
     if (ghostRequestMode === "pb" && personalBestTimeMs != null) {
+      setIsGhostTargetLoading(false);
       setGhostTarget({ label: "PB ghost", timeMs: personalBestTimeMs });
       return () => {
         cancelled = true;
       };
     }
+    setIsGhostTargetLoading(true);
     fetchLeaderboard(levelId)
       .then((leaderboard) => {
         if (cancelled) return;
@@ -295,8 +305,13 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
         } else {
           setGhostTarget(null);
         }
+        setIsGhostTargetLoading(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cancelled) return;
+        setGhostTarget(null);
+        setIsGhostTargetLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -509,6 +524,11 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
   }, [handleButtonClick, phase]);
 
   const isReacting = phase === "reaction";
+  const ghostTargetSummary = ghostTarget
+    ? `${ghostTarget.label} · ${(ghostTarget.timeMs / 1000).toFixed(2)}s`
+    : isGhostTargetLoading
+      ? "Finding pace"
+      : "No target available";
 
   if (phase === "idle" && !sessionProps) {
     return (
@@ -528,7 +548,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             </div>
             <div className="metric-chip">
               <span>Ghost target</span>
-              <strong>{ghostTarget ? `${ghostTarget.label} · ${(ghostTarget.timeMs / 1000).toFixed(2)}s` : "Finding pace"}</strong>
+              <strong>{ghostTargetSummary}</strong>
             </div>
             <div className="metric-chip">
               <span>Pressure</span>
@@ -673,65 +693,68 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
             {ghostTarget && (
               <div className="metric-chip">
                 <span>Ghost result</span>
-                <GhostTimeline comparison={ghostComparison} />
+                <GhostTimeline comparison={ghostComparison} isLoading={isGhostTargetLoading} />
               </div>
             )}
           </div>
           {rivalInsight && <p className="text-muted text-sm">{rivalInsight.message}</p>}
+          {sessionProps && <p className="text-secondary text-center">Your result is locked in. Stay in the session while the rest of the lobby finishes.</p>}
         </div>
         {phase === "saving" && <p className="loading-text text-sm">Saving…</p>}
-        <div className="game-result-actions">
-          <button
-            type="button"
-            onClick={() => navigate(buildReflexPlayUrl(levelId, { ghostMode: "pb", autostartToken: `${Date.now()}` }))}
-            className="btn btn-primary"
-            disabled={phase === "saving"}
-          >
-            {lastResultWasBest ? "Defend your PB" : "Beat your PB"}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`)}
-            className="btn"
-            disabled={phase === "saving"}
-          >
-            View ranking
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              const ghostTimeMs = levelProgress?.bestTimeMs ?? cumulativeTimeMs;
-              const url = typeof window !== "undefined"
-                ? buildReflexChallengeUrl(window.location.origin, levelId, ghostTimeMs)
-                : buildReflexPlayUrl(levelId, {
-                    sharedGhost: {
-                      label: "Friend PB",
-                      timeMs: ghostTimeMs,
-                    },
-                  });
-              if (navigator?.clipboard?.writeText) {
-                try {
-                  navigator.clipboard.writeText(url).catch(() => {});
-                } catch {
-                  // Ignore clipboard write failures in unsupported contexts.
+        {!sessionProps && (
+          <div className="game-result-actions">
+            <button
+              type="button"
+              onClick={() => navigate(buildReflexPlayUrl(levelId, { ghostMode: "pb", autostartToken: `${Date.now()}` }))}
+              className="btn btn-primary"
+              disabled={phase === "saving"}
+            >
+              {lastResultWasBest ? "Defend your PB" : "Beat your PB"}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/leaderboard?game=reflex&level=${encodeURIComponent(levelId)}&justFinished=1`)}
+              className="btn"
+              disabled={phase === "saving"}
+            >
+              View ranking
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                const ghostTimeMs = levelProgress?.bestTimeMs ?? cumulativeTimeMs;
+                const url = typeof window !== "undefined"
+                  ? buildReflexChallengeUrl(window.location.origin, levelId, ghostTimeMs)
+                  : buildReflexPlayUrl(levelId, {
+                      sharedGhost: {
+                        label: "Friend PB",
+                        timeMs: ghostTimeMs,
+                      },
+                    });
+                if (navigator?.clipboard?.writeText) {
+                  try {
+                    navigator.clipboard.writeText(url).catch(() => {});
+                  } catch {
+                    // Ignore clipboard write failures in unsupported contexts.
+                  }
                 }
-              }
-              const btn = e.currentTarget;
-              const original = btn.innerText;
-              btn.innerText = "Copied!";
-              setTimeout(() => {
-                btn.innerText = original;
-              }, 2000);
-            }}
-            className="btn"
-            disabled={phase === "saving"}
-          >
-            Challenge a friend
-          </button>
-          <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={phase === "saving"}>
-            Home
-          </button>
-        </div>
+                const btn = e.currentTarget;
+                const original = btn.innerText;
+                btn.innerText = "Copied!";
+                setTimeout(() => {
+                  btn.innerText = original;
+                }, 2000);
+              }}
+              className="btn"
+              disabled={phase === "saving"}
+            >
+              Challenge a friend
+            </button>
+            <button type="button" onClick={() => navigate("/")} className="btn btn-ghost" disabled={phase === "saving"}>
+              Home
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -753,7 +776,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
           </div>
           <div className="metric-chip">
             <span>Ghost target</span>
-            <strong>{ghostTarget ? `${ghostTarget.label} · ${(ghostTarget.timeMs / 1000).toFixed(2)}s` : "Finding pace"}</strong>
+            <strong>{ghostTargetSummary}</strong>
           </div>
           <div className="metric-chip">
             <span>Last split</span>
@@ -761,7 +784,7 @@ export default function ReflexGame({ levelId, sessionProps }: { levelId: string;
           </div>
           <div className="metric-chip">
             <span>Ghost pace</span>
-            <GhostTimeline comparison={ghostComparison} />
+            <GhostTimeline comparison={ghostComparison} isLoading={isGhostTargetLoading} />
           </div>
         </div>
         <div className="reflex-stage">

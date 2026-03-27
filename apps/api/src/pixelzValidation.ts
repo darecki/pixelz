@@ -1,4 +1,10 @@
-import { getDailyPixelzBoardSpec, isDailyPixelzBoardId, replayPixelzMoveSequence, type PixelzBoardSpec } from "@pixelz/shared";
+import {
+  getDailyPixelzBoardSpec,
+  isDailyPixelzBoardId,
+  isReleasedDailyPixelzBoardId,
+  replayPixelzMoveSequence,
+  type PixelzBoardSpec,
+} from "@pixelz/shared";
 
 type SqlExecutor = any;
 
@@ -27,6 +33,9 @@ export async function getPixelzBoardSpec(
   levelId: string
 ): Promise<PixelzBoardSpec | null> {
   if (isDailyPixelzBoardId(levelId)) {
+    if (!isReleasedDailyPixelzBoardId(levelId)) {
+      return null;
+    }
     const board = getDailyPixelzBoardSpec(levelId);
     return {
       width: board.width,

@@ -28,6 +28,8 @@ describe("getPixelzBoardSpec", () => {
 
   it("derives daily boards without hitting the database", async () => {
     const daily = getDailyPixelzBoardSpec("pixelz_daily_2026-03-26");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-26T12:00:00Z"));
     await expect(getPixelzBoardSpec(mockExecutor as any, daily.boardId)).resolves.toEqual({
       width: daily.width,
       height: daily.height,
@@ -35,6 +37,15 @@ describe("getPixelzBoardSpec", () => {
       seed: daily.seed,
     });
     expect(mockExecutor).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("rejects unreleased daily boards without hitting the database", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-26T12:00:00Z"));
+    await expect(getPixelzBoardSpec(mockExecutor as any, "pixelz_daily_2026-03-27")).resolves.toBeNull();
+    expect(mockExecutor).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 
