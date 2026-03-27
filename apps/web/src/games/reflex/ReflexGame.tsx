@@ -87,13 +87,12 @@ export function buildReflexPlayUrl(
     game: "reflex",
     level: levelId,
   });
-  if (options?.ghostMode === "pb") {
-    params.set("ghost", "pb");
-  }
   if (options?.sharedGhost) {
     params.set("ghost", "shared");
     params.set("ghostTimeMs", `${Math.round(options.sharedGhost.timeMs)}`);
     params.set("ghostLabel", options.sharedGhost.label);
+  } else if (options?.ghostMode === "pb") {
+    params.set("ghost", "pb");
   }
   if (options?.autostartToken) {
     params.set("autostart", options.autostartToken);
@@ -139,8 +138,8 @@ export function buildGhostComparison(
     };
   }
   // Reflex does not persist per-round ghost splits yet, so pace is estimated as a linear share of total target time.
-  const splitTargetMs = (ghostTarget.timeMs * completedRounds) / totalRounds;
-  const deltaMs = cumulativeTimeMs - splitTargetMs;
+  const splitTargetMs = Math.round((ghostTarget.timeMs * completedRounds) / totalRounds);
+  const deltaMs = Math.round(cumulativeTimeMs - splitTargetMs);
   return {
     targetLabel,
     baselineMs: ghostTarget.timeMs,

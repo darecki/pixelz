@@ -118,6 +118,12 @@ describe("ReflexGame", () => {
     expect(buildReflexPlayUrl("reflex_level_0", { ghostMode: "pb", autostartToken: "123" })).toBe(
       "/play?game=reflex&level=reflex_level_0&ghost=pb&autostart=123"
     );
+    expect(buildReflexPlayUrl("reflex_level_0", {
+      ghostMode: "pb",
+      sharedGhost: { label: "Friend PB", timeMs: 3950 },
+    })).toBe(
+      "/play?game=reflex&level=reflex_level_0&ghost=shared&ghostTimeMs=3950&ghostLabel=Friend+PB"
+    );
     expect(buildReflexChallengeUrl("https://pixelz.test", "reflex_level_0", 3950)).toBe(
       "https://pixelz.test/play?game=reflex&level=reflex_level_0&ghost=shared&ghostTimeMs=3950&ghostLabel=Friend+PB"
     );
@@ -164,6 +170,16 @@ describe("ReflexGame", () => {
       deltaMs: 380,
     }));
     expect(getGhostCurrentFillClass(comparison!.status)).toBe("ghost-timeline__fill--current-behind");
+  });
+
+  it("treats sub-millisecond pace drift as tied after rounding", () => {
+    const comparison = buildGhostComparison({ label: "Leaderboard ghost", timeMs: 1001 }, 1, 5, 200);
+
+    expect(comparison).toEqual(expect.objectContaining({
+      targetProgressMs: 200,
+      deltaMs: 0,
+      status: "tied",
+    }));
   });
 
   it("submits a disqualification on a wrong color instead of restarting the session run", async () => {
