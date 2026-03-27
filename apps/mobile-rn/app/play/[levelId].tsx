@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text } from "react-native";
+import { formatBoardLabel, isDailyPixelzBoardId } from "@pixelz/ts-game-core";
 import { CenteredMessage, Screen } from "../../src/components/Screen";
 import { AppButton, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { PixelzGame } from "../../src/features/pixelz/PixelzGame";
@@ -9,12 +10,6 @@ import { fetchBoard } from "../../src/lib/api";
 import { enqueueEvent, trySyncInBackground } from "../../src/lib/offline-sync";
 import { recordLevelResult } from "../../src/lib/db";
 import { colors } from "../../src/theme/tokens";
-
-function formatLevelLabel(levelId: string) {
-  return levelId
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
 
 export default function PlayLevelScreen() {
   const params = useLocalSearchParams<{ levelId: string }>();
@@ -47,7 +42,7 @@ export default function PlayLevelScreen() {
   return (
     <Screen
       title="Play Pixelz"
-      subtitle={formatLevelLabel(params.levelId)}
+      subtitle={formatBoardLabel(params.levelId)}
       right={
         <AppButton
           label="Leaderboard"
@@ -76,6 +71,7 @@ export default function PlayLevelScreen() {
               levelId: params.levelId,
               moves: result.moves,
               timeMs: result.timeMs,
+              dailyChallenge: isDailyPixelzBoardId(params.levelId),
             });
             await enqueueEvent({
               type: "LEVEL_COMPLETED",

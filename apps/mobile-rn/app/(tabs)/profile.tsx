@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
+import { formatBoardLabel } from "@pixelz/ts-game-core";
 import { Screen } from "../../src/components/Screen";
 import { AppButton, Card, SectionLabel, StatRow } from "../../src/components/ui";
 import { getProfileSnapshot, type ProfileSnapshot } from "../../src/lib/db";
@@ -67,7 +68,7 @@ export default function ProfileScreen() {
         renderItem={({ item }) => (
           <Card>
             <SectionLabel>{item.gameId}</SectionLabel>
-            <Text style={styles.runTitle}>{item.levelId.replace(/_/g, " ")}</Text>
+            <Text style={styles.runTitle}>{formatBoardLabel(item.levelId)}</Text>
             <StatRow label="Best" value={`${item.bestMoves} moves · ${(item.bestTimeMs / 1000).toFixed(2)}s`} />
             <StatRow label="Plays" value={`${item.plays}`} />
           </Card>

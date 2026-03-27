@@ -5,9 +5,9 @@
   "scripts": {
     "build": "pnpm --prefix ../.. --filter @pixelz/shared... run build && tsc",
     "dev": "tsx watch src/index.ts",
-    "lint": "tsc --noEmit",
+    "lint": "pnpm --prefix ../.. --filter @pixelz/shared run build && tsc --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "vitest run",
+    "test": "pnpm --prefix ../.. --filter @pixelz/shared run build && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

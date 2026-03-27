@@ -1,5 +1,11 @@
 import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import type { SyncEvent } from "@pixelz/ts-contracts";
+import {
+  computeCompetitionOverview,
+  toDateKey,
+  type CompetitionOverview,
+  type GameId,
+} from "@pixelz/ts-game-core";
 
 const DB_NAME = "pixelz-mobile.db";
 
@@ -40,6 +46,15 @@ export type ProfileSnapshot = {
   }>;
 };
 
+export type LevelProgressSnapshot = {
+  bestMoves: number;
+  bestTimeMs: number;
+  lastMoves: number;
+  lastTimeMs: number;
+  plays: number;
+  lastPlayedAt: string;
+};
+
 let databasePromise: Promise<SQLiteDatabase> | null = null;
 let initialized = false;
 
@@ -75,6 +90,12 @@ async function getDatabase() {
         plays INTEGER NOT NULL,
         last_played_at TEXT NOT NULL,
         PRIMARY KEY (game_id, level_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS daily_completions (
+        date_key TEXT NOT NULL,
+        game_id TEXT NOT NULL,
+        PRIMARY KEY (date_key, game_id)
       );
     `);
     initialized = true;
@@ -160,11 +181,12 @@ export async function getPendingQueueCount() {
 }
 
 export async function recordLevelResult(input: {
-  gameId: "pixelz" | "reflex";
+  gameId: GameId;
   levelId: string;
   moves: number;
   timeMs: number;
   completedAt?: string;
+  dailyChallenge?: boolean;
 }) {
   const database = await getDatabase();
   const existing = await database.getFirstAsync<ResultRow>(
@@ -188,33 +210,77 @@ export async function recordLevelResult(input: {
       1,
       completedAt
     );
-    return;
+  } else {
+    const isNewBest =
+      input.gameId === "pixelz"
+        ? input.moves < existing.best_moves ||
+          (input.moves === existing.best_moves && input.timeMs < existing.best_time_ms)
+        : input.timeMs < existing.best_time_ms;
+
+    await database.runAsync(
+      `UPDATE level_results
+        SET best_moves = ?,
+            best_time_ms = ?,
+            last_moves = ?,
+            last_time_ms = ?,
+            plays = ?,
+            last_played_at = ?
+        WHERE game_id = ? AND level_id = ?`,
+      isNewBest ? input.moves : existing.best_moves,
+      isNewBest ? input.timeMs : existing.best_time_ms,
+      input.moves,
+      input.timeMs,
+      existing.plays + 1,
+      completedAt,
+      input.gameId,
+      input.levelId
+    );
   }
 
-  const isNewBest =
-    input.gameId === "pixelz"
-      ? input.moves < existing.best_moves ||
-        (input.moves === existing.best_moves && input.timeMs < existing.best_time_ms)
-      : input.timeMs < existing.best_time_ms;
+  if (input.dailyChallenge) {
+    await database.runAsync(
+      "INSERT OR IGNORE INTO daily_completions(date_key, game_id) VALUES (?, ?)",
+      toDateKey(new Date(completedAt)),
+      input.gameId
+    );
+  }
+}
 
-  await database.runAsync(
-    `UPDATE level_results
-      SET best_moves = ?,
-          best_time_ms = ?,
-          last_moves = ?,
-          last_time_ms = ?,
-          plays = ?,
-          last_played_at = ?
-      WHERE game_id = ? AND level_id = ?`,
-    isNewBest ? input.moves : existing.best_moves,
-    isNewBest ? input.timeMs : existing.best_time_ms,
-    input.moves,
-    input.timeMs,
-    existing.plays + 1,
-    completedAt,
-    input.gameId,
-    input.levelId
+export async function getLevelProgress(gameId: GameId, levelId: string): Promise<LevelProgressSnapshot | null> {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync<ResultRow>(
+    "SELECT * FROM level_results WHERE game_id = ? AND level_id = ?",
+    gameId,
+    levelId
   );
+
+  if (!row) return null;
+
+  return {
+    bestMoves: row.best_moves,
+    bestTimeMs: row.best_time_ms,
+    lastMoves: row.last_moves,
+    lastTimeMs: row.last_time_ms,
+    plays: row.plays,
+    lastPlayedAt: row.last_played_at,
+  };
+}
+
+export async function getCompetitionOverviewSnapshot(now = new Date()): Promise<CompetitionOverview> {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync<{ date_key: string; game_id: GameId }>(
+    "SELECT date_key, game_id FROM daily_completions ORDER BY date_key ASC"
+  );
+
+  const dailyCompletions = rows.reduce<Record<string, GameId[]>>((accumulator, row) => {
+    if (!accumulator[row.date_key]) {
+      accumulator[row.date_key] = [];
+    }
+    accumulator[row.date_key].push(row.game_id);
+    return accumulator;
+  }, {});
+
+  return computeCompetitionOverview(dailyCompletions, now);
 }
 
 export async function getProfileSnapshot(): Promise<ProfileSnapshot> {
