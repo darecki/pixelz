@@ -397,12 +397,27 @@ function ReflexPlayLevelScreen({
   const [runKey, setRunKey] = useState(0);
   const [completion, setCompletion] = useState<ReflexCompletionState | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+  const [ghostOverride, setGhostOverride] = useState<GhostTarget | null>(null);
   const personalBest = useQuery({
     queryKey: ["local-reflex-progress", levelId, runKey],
     queryFn: () => getLevelProgress("reflex", levelId),
   });
-
-  const ghostTarget = useMemo(() => resolveReflexGhostTarget(ghostParams, personalBest.data ?? null), [ghostParams, personalBest.data]);
+  const requestedGhostTarget = useMemo(() => resolveReflexGhostTarget(ghostParams, personalBest.data ?? null), [ghostParams, personalBest.data]);
+  const leaderboardGhostQuery = useQuery({
+    queryKey: ["reflex-ghost-target", levelId],
+    queryFn: () => fetchLeaderboard(levelId),
+    enabled: requestedGhostTarget == null,
+  });
+  const fallbackGhostTarget = useMemo(() => {
+    const leader = leaderboardGhostQuery.data?.entries[0];
+    if (!leader) return null;
+    return {
+      label: "Leaderboard ghost",
+      timeMs: leader.timeMs,
+    };
+  }, [leaderboardGhostQuery.data]);
+  const isFallbackGhostLoading = requestedGhostTarget == null && leaderboardGhostQuery.isPending;
+  const ghostTarget = ghostOverride ?? requestedGhostTarget ?? fallbackGhostTarget;
 
   async function handleShare() {
     if (!completion) return;
@@ -473,10 +488,19 @@ function ReflexPlayLevelScreen({
     }
   }
 
-  function resetRun() {
+  function restart(nextGhost: GhostTarget | null) {
     setCompletion(null);
     setShowSignInPrompt(false);
+    setGhostOverride(nextGhost);
     setRunKey((current) => current + 1);
+  }
+
+  function resetRun() {
+    restart(null);
+  }
+
+  function restartWithGhost(nextGhost: GhostTarget | null) {
+    restart(nextGhost);
   }
 
   return (
@@ -497,7 +521,15 @@ function ReflexPlayLevelScreen({
           <SectionLabel>Ghost Target</SectionLabel>
           <Text style={styles.resultTitle}>{ghostTarget.label}</Text>
           <Text style={styles.copy}>
-            Chase {(ghostTarget.timeMs / 1000).toFixed(2)}s on this level. The shared link brought a target pace into your next run.
+            Chase {(ghostTarget.timeMs / 1000).toFixed(2)}s on this level.
+          </Text>
+        </Card>
+      ) : isFallbackGhostLoading ? (
+        <Card>
+          <SectionLabel>Ghost Target</SectionLabel>
+          <Text style={styles.resultTitle}>Loading target…</Text>
+          <Text style={styles.copy}>
+            Pulling the leaderboard pace before the run starts.
           </Text>
         </Card>
       ) : null}
@@ -573,6 +605,14 @@ function ReflexPlayLevelScreen({
 
           <View style={styles.actions}>
             <AppButton label={completion.isNewBest ? "Defend PB" : "Play Again"} onPress={resetRun} />
+            <AppButton
+              label="Run PB Ghost"
+              tone="ghost"
+              onPress={() => restartWithGhost({
+                label: "PB ghost",
+                timeMs: completion.currentBest.bestTimeMs,
+              })}
+            />
             <AppButton label="View Ranking" tone="secondary" onPress={() => router.push("/(tabs)/leaderboard")} />
             <AppButton
               label="Challenge a Friend"
@@ -583,6 +623,14 @@ function ReflexPlayLevelScreen({
             />
           </View>
         </>
+      ) : isFallbackGhostLoading ? (
+        <Card>
+          <SectionLabel>Solo Run</SectionLabel>
+          <Text style={styles.resultTitle}>Preparing ghost pace</Text>
+          <Text style={styles.copy}>
+            The run will unlock as soon as the fallback target finishes loading.
+          </Text>
+        </Card>
       ) : (
         <ReflexGame
           key={`${levelId}:${runKey}`}

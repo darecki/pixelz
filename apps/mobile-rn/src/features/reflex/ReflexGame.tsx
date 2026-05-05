@@ -8,6 +8,14 @@ import { COUNTDOWN_MS, DELAY_AFTER_CORRECT_MS, getRoundsForLevel, REFLEX_COLORS 
 
 type Phase = "idle" | "countdown" | "reaction" | "delay" | "gameover" | "submitting" | "submitError" | "submitted";
 type SessionOutcome = "completed" | "disqualified" | null;
+type GhostComparison = {
+  targetLabel: string;
+  baselineMs: number;
+  targetProgressMs: number;
+  currentMs: number;
+  deltaMs: number;
+  status: "ahead" | "behind" | "tied" | "idle";
+};
 
 export type ReflexCompletionResult = {
   score: number;
@@ -17,6 +25,48 @@ export type ReflexCompletionResult = {
 };
 
 const COUNTDOWN_STEPS = [3, 2, 1] as const;
+
+function formatSignedDelta(ms: number): string {
+  if (ms === 0) return "0.00s";
+  const sign = ms < 0 ? "-" : "+";
+  return `${sign}${(Math.abs(ms) / 1000).toFixed(2)}s`;
+}
+
+function buildGhostComparison(
+  ghostTarget: { label: string; timeMs: number } | null,
+  completedRounds: number,
+  totalRounds: number,
+  cumulativeTimeMs: number
+): GhostComparison | null {
+  if (!ghostTarget) return null;
+  const targetLabel =
+    ghostTarget.label === "PB ghost"
+      ? "PB"
+      : ghostTarget.label === "Leaderboard ghost"
+        ? "Leader"
+        : ghostTarget.label;
+  if (completedRounds === 0 || cumulativeTimeMs === 0) {
+    return {
+      targetLabel,
+      baselineMs: ghostTarget.timeMs,
+      targetProgressMs: Math.round(ghostTarget.timeMs / totalRounds),
+      currentMs: 0,
+      deltaMs: 0,
+      status: "idle",
+    };
+  }
+  // Reflex does not persist per-round ghost splits yet, so pace is estimated as a linear share of total target time.
+  const targetProgressMs = Math.round((ghostTarget.timeMs * completedRounds) / totalRounds);
+  const deltaMs = Math.round(cumulativeTimeMs - targetProgressMs);
+  return {
+    targetLabel,
+    baselineMs: ghostTarget.timeMs,
+    targetProgressMs,
+    currentMs: cumulativeTimeMs,
+    deltaMs,
+    status: deltaMs < 0 ? "ahead" : deltaMs > 0 ? "behind" : "tied",
+  };
+}
 
 export function ReflexGame({
   levelId,
@@ -63,6 +113,15 @@ export function ReflexGame({
     }
     return REFLEX_COLORS[Math.floor(Math.random() * REFLEX_COLORS.length)];
   }, [deterministicSequence]);
+  const completedRounds =
+    phase === "delay"
+      ? round
+      : phase === "submitting" || phase === "submitted"
+        ? sessionOutcome === "completed"
+          ? totalRounds
+          : Math.max(0, round - 1)
+        : Math.max(0, round - 1);
+  const ghostComparison = buildGhostComparison(ghostTarget, completedRounds, totalRounds, cumulativeTimeMs);
 
   const resetRun = useCallback(() => {
     pendingSubmitRef.current = null;
@@ -266,10 +325,51 @@ export function ReflexGame({
           <Metric label="Last split" value={lastSplitMs != null ? `${(lastSplitMs / 1000).toFixed(2)}s` : "—"} />
         </View>
         {ghostTarget ? (
-          <View style={styles.ghostRow}>
-            <Text style={styles.ghostLabel}>{ghostTarget.label}</Text>
-            <Text style={styles.ghostValue}>{(ghostTarget.timeMs / 1000).toFixed(2)}s target</Text>
-          </View>
+          <>
+            <View style={styles.ghostRow}>
+              <Text style={styles.ghostLabel}>{ghostTarget.label}</Text>
+              <Text style={styles.ghostValue}>{(ghostTarget.timeMs / 1000).toFixed(2)}s target</Text>
+            </View>
+            {ghostComparison ? (
+              <>
+                <View style={styles.ghostTracks}>
+                  <View style={styles.ghostTrack}>
+                    <View
+                      style={[
+                        styles.ghostFill,
+                        styles.ghostFillTarget,
+                        {
+                          width: `${Math.max(0, Math.min(100, (ghostComparison.targetProgressMs / ghostComparison.baselineMs) * 100))}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.ghostTrack}>
+                    <View
+                      style={[
+                        styles.ghostFill,
+                        ghostComparison.status === "behind" ? styles.ghostFillBehind : styles.ghostFillCurrent,
+                        {
+                          width: `${Math.max(0, Math.min(100, (ghostComparison.currentMs / ghostComparison.baselineMs) * 100))}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.ghostDelta,
+                    ghostComparison.status === "ahead" ? styles.ghostDeltaAhead : null,
+                    ghostComparison.status === "behind" ? styles.ghostDeltaBehind : null,
+                  ]}
+                >
+                  {ghostComparison.status === "idle"
+                    ? `Waiting for first split against ${ghostComparison.targetLabel}`
+                    : `${formatSignedDelta(ghostComparison.deltaMs)} vs ${ghostComparison.targetLabel}`}
+                </Text>
+              </>
+            ) : null}
+          </>
         ) : null}
       </Card>
 
@@ -392,6 +492,40 @@ const styles = StyleSheet.create({
     color: colors.accentTeal,
     fontSize: 13,
     fontWeight: "700",
+  },
+  ghostTracks: {
+    gap: 8,
+    paddingTop: 4,
+  },
+  ghostTrack: {
+    height: 8,
+    borderRadius: radii.full,
+    overflow: "hidden",
+    backgroundColor: colors.bgSecondary,
+  },
+  ghostFill: {
+    height: "100%",
+    borderRadius: radii.full,
+  },
+  ghostFillTarget: {
+    backgroundColor: colors.accentTeal,
+  },
+  ghostFillCurrent: {
+    backgroundColor: colors.accent,
+  },
+  ghostFillBehind: {
+    backgroundColor: colors.accentCoral,
+  },
+  ghostDelta: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  ghostDeltaAhead: {
+    color: colors.success,
+  },
+  ghostDeltaBehind: {
+    color: colors.accentCoral,
   },
   metricRow: {
     flexDirection: "row",
