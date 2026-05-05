@@ -3,25 +3,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --prefix ../.. --filter @pixelz/shared run build && tsc",
+    "build": "pnpm --prefix ../.. --filter @pixelz/shared... run build && tsc",
     "dev": "tsx watch src/index.ts",
-    "lint": "tsc --noEmit",
+    "lint": "pnpm --prefix ../.. --filter @pixelz/shared run build && tsc --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "vitest run",
+    "test": "pnpm --prefix ../.. --filter @pixelz/shared run build && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.7",
+    "@hono/node-server": "^1.19.11",
     "@pixelz/shared": "workspace:*",
-    "hono": "^4.6.12",
-    "jose": "^5.9.6",
+    "hono": "^4.12.9",
+    "jose": "^6.2.2",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "@types/node": "^22.9.0",
-    "dotenv": "^16.4.5",
+    "@types/node": "^25.5.0",
+    "dotenv": "^17.3.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.6"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
   }
 }

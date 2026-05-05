@@ -21,7 +21,7 @@ describe("competition UTC daily helpers", () => {
 
   beforeEach(() => {
     for (const key of Object.keys(storage)) delete storage[key];
-    Object.defineProperty(global, "localStorage", {
+    Object.defineProperty(globalThis, "localStorage", {
       value: {
         getItem: (key: string) => storage[key] ?? null,
         setItem: (key: string, value: string) => {
